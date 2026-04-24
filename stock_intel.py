@@ -14,6 +14,10 @@ import math
 import requests
 import streamlit as st
 from datetime import datetime
+import os
+import tempfile
+
+os.environ["YFINANCE_CACHE_DIR"] = tempfile.gettempdir()
 
 try:
     import yfinance as yf
@@ -390,11 +394,54 @@ def generate_signal(closes, highs, lows, volumes, ind):
 # ── Data Fetching ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_via_yfinance(yf_ticker, period, interval):
-    if not YF_AVAILABLE: return None
+    # Try direct Yahoo Finance JSON first (faster, avoids rate limits)
     try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_ticker}?range={period}&interval={interval}"
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            data   = r.json()
+            result = data.get("chart", {}).get("result", [None])[0]
+            if result:
+                meta = result.get("meta", {})
+                q    = result.get("indicators", {}).get("quote", [{}])[0]
+                opens   = clean_list(q.get("open",   []))
+                highs   = clean_list(q.get("high",   []))
+                lows    = clean_list(q.get("low",    []))
+                closes  = clean_list(q.get("close",  []))
+                volumes = clean_list(q.get("volume", []))
+                if len(closes) >= 5:
+                    curr = meta.get("regularMarketPrice") or closes[-1]
+                    prev = meta.get("previousClose") or meta.get("chartPreviousClose") or closes[-2]
+                    return {
+                        "source": "Yahoo Finance (direct)",
+                        "current_price": curr, "prev_close": prev,
+                        "open":   meta.get("regularMarketOpen",    opens[-1]  if opens   else curr),
+                        "high":   meta.get("regularMarketDayHigh", highs[-1]  if highs   else curr),
+                        "low":    meta.get("regularMarketDayLow",  lows[-1]   if lows    else curr),
+                        "volume": meta.get("regularMarketVolume",  volumes[-1] if volumes else 0),
+                        "change": curr - prev,
+                        "change_pct": ((curr - prev) / prev * 100) if prev else 0,
+                        "time": datetime.now().strftime("%H:%M"),
+                        "opens": opens, "highs": highs, "lows": lows,
+                        "closes": closes, "volumes": volumes,
+                        "pe_ratio": None, "eps": None, "market_cap": None,
+                        "revenue_growth": None, "debt_equity": None, "roe": None,
+                        "dividend_yield": None, "52w_high": meta.get("fiftyTwoWeekHigh"),
+                        "52w_low": meta.get("fiftyTwoWeekLow"), "sector": None,
+                    }
+    except Exception as e:
+        st.warning(f"Direct Yahoo error: {e}")
+
+    # Fallback to yfinance library
+    if not YF_AVAILABLE:
+        return None
+    try:
+        import yfinance as yf
         ticker = yf.Ticker(yf_ticker)
         hist   = ticker.history(period=period, interval=interval, auto_adjust=True)
-        if hist.empty or len(hist) < 5: return None
+        if hist.empty or len(hist) < 5:
+            return None
         info = {}
         try: info = ticker.info
         except: pass
