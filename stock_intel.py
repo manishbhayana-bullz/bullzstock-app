@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ============================================================
-Indian Stock Market Intelligence — Streamlit Web App
+MB Stock Intelligence — Streamlit Web App
 ============================================================
 Run with:
     streamlit run app_stocks.py
@@ -27,8 +27,8 @@ except ImportError:
 
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(
-    page_title="Indian Stock Intelligence",
-    page_icon="📈",
+    page_title="MB Stock Intelligence",
+    page_icon="🐂",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -549,7 +549,7 @@ def indicator_row(label, value, reading="", reading_color="#212529"):
 def main():
     # ── Sidebar ───────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("## 📈 Stock Intelligence")
+        st.markdown("## 🐂 MB Stock Intelligence")
         st.markdown("*Free Edition — No API Key*")
         st.markdown("---")
 
@@ -585,7 +585,18 @@ def main():
         st.caption("Signals: RSI · MACD · EMA · Bollinger · ATR · Stochastic")
 
     # ── Main content ──────────────────────────────────────────
-    st.title("📈 Indian Stock Market Intelligence")
+    st.markdown("""
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:0.5rem">
+    <div style="font-size:52px;line-height:1">🐂</div>
+    <div>
+        <div style="font-size:28px;font-weight:700;line-height:1.1">MB Stock Intelligence</div>
+        <div style="font-size:13px;color:#6c757d">Live NSE prices · Indicator confluence · Telegram alerts</div>
+    </div>
+    <div style="margin-left:auto;background:#1a7340;color:white;padding:4px 14px;
+                border-radius:20px;font-size:12px;font-weight:600">MB</div>
+</div>
+<hr style="margin:0.5rem 0 1rem 0">
+""", unsafe_allow_html=True)
     st.caption("Live NSE prices · Rule-based indicator confluence · Telegram alerts · Free edition")
 
     if not analyse:
