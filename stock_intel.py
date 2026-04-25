@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 """
 ============================================================
-MB Stock Intelligence — Streamlit Web App
+MB Stock Intelligence — Enhanced Edition
 ============================================================
-Run with:
-    streamlit run app_stocks.py
+Enhancements:
+  A. Bloomberg-lite candlestick chart with EMA 50/200, Bollinger Bands,
+     volume bars — all in one interactive Plotly chart
+     + Gauge charts for RSI and Success Probability
+     + Donut chart for Risk:Reward ratio
+     + Sparkline for Period Return
+  B. Signal history table — last 10 signals per stock (session memory)
+  C. Show/Hide toggle buttons for chart indicators
 
-Opens at: http://localhost:8501
+Run with:
+    streamlit run MB_Stock_Enhanced.py
 ============================================================
 """
 
 import math
+import json
 import requests
 import streamlit as st
 from datetime import datetime
@@ -24,6 +32,13 @@ try:
     YF_AVAILABLE = True
 except ImportError:
     YF_AVAILABLE = False
+
+try:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
 
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(
@@ -94,6 +109,33 @@ st.markdown("""
         background: #f8f9fa;
         border-radius: 8px;
     }
+    .chart-toggle-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 0;
+        margin-bottom: 8px;
+    }
+    .history-table {
+        font-size: 12px;
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .history-table th {
+        background: #f1f3f5;
+        padding: 6px 10px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: #6c757d;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .history-table td {
+        padding: 6px 10px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 12px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -129,6 +171,15 @@ SIGNAL_CONFIG = {
     "HOLD":        {"color": "#004085", "bg": "#cce5ff", "border": "#007bff", "icon": "▬"},
     "WAIT":        {"color": "#856404", "bg": "#fff3cd", "border": "#ffc107", "icon": "◌"},
 }
+
+# ── Session state for signal history & chart toggles ──────────
+if "signal_history" not in st.session_state:
+    st.session_state.signal_history = {}  # {ticker: [list of signal dicts]}
+
+if "chart_show_ema50"   not in st.session_state: st.session_state.chart_show_ema50   = True
+if "chart_show_ema200"  not in st.session_state: st.session_state.chart_show_ema200  = True
+if "chart_show_bb"      not in st.session_state: st.session_state.chart_show_bb      = True
+if "chart_show_volume"  not in st.session_state: st.session_state.chart_show_volume  = True
 
 # ── Helpers ───────────────────────────────────────────────────
 def fmt_inr(val):
@@ -179,6 +230,34 @@ def calc_ema(closes, period):
     for price in closes[1:]:
         ema = price * k + ema * (1 - k)
     return ema
+
+def calc_ema_series(closes, period):
+    """Returns full EMA series for chart plotting"""
+    if len(closes) < period:
+        return [None] * len(closes)
+    k = 2 / (period + 1)
+    result = [None] * (period - 1)
+    ema = sum(closes[:period]) / period
+    result.append(ema)
+    for price in closes[period:]:
+        ema = price * k + ema * (1 - k)
+        result.append(ema)
+    return result
+
+def calc_bb_series(closes, period=20):
+    """Returns Bollinger Band upper/mid/lower series for chart"""
+    upper_s, mid_s, lower_s = [], [], []
+    for i in range(len(closes)):
+        if i < period - 1:
+            upper_s.append(None); mid_s.append(None); lower_s.append(None)
+        else:
+            sl = closes[i - period + 1 : i + 1]
+            mid = sum(sl) / period
+            std = math.sqrt(sum((v - mid)**2 for v in sl) / period)
+            upper_s.append(mid + 2 * std)
+            mid_s.append(mid)
+            lower_s.append(mid - 2 * std)
+    return upper_s, mid_s, lower_s
 
 def calc_macd(closes):
     if len(closes) < 26:
@@ -271,6 +350,9 @@ def compute_all(price_data):
         "ema200":       calc_ema(c, min(200, len(c))),
         "ema9":         calc_ema(c, min(9,   len(c))),
         "ema21":        calc_ema(c, min(21,  len(c))),
+        "ema50_series": calc_ema_series(c, min(50,  len(c))),
+        "ema200_series":calc_ema_series(c, min(200, len(c))),
+        "bb_series":    calc_bb_series(c),
         "atr":          calc_atr(h, l, c),
         "stoch_k":      sk,
         "stoch_d":      sd,
@@ -394,7 +476,6 @@ def generate_signal(closes, highs, lows, volumes, ind):
 # ── Data Fetching ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_via_yfinance(yf_ticker, period, interval):
-    # Try direct Yahoo Finance JSON first (faster, avoids rate limits)
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_ticker}?range={period}&interval={interval}"
         headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -405,11 +486,19 @@ def fetch_via_yfinance(yf_ticker, period, interval):
             if result:
                 meta = result.get("meta", {})
                 q    = result.get("indicators", {}).get("quote", [{}])[0]
+                timestamps = result.get("timestamp", [])
                 opens   = clean_list(q.get("open",   []))
                 highs   = clean_list(q.get("high",   []))
                 lows    = clean_list(q.get("low",    []))
                 closes  = clean_list(q.get("close",  []))
                 volumes = clean_list(q.get("volume", []))
+                # Convert timestamps to datetime strings for chart
+                dates = []
+                for ts in timestamps:
+                    try:
+                        dates.append(datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M"))
+                    except:
+                        dates.append("")
                 if len(closes) >= 5:
                     curr = meta.get("regularMarketPrice") or closes[-1]
                     prev = meta.get("previousClose") or meta.get("chartPreviousClose") or closes[-2]
@@ -425,6 +514,7 @@ def fetch_via_yfinance(yf_ticker, period, interval):
                         "time": datetime.now().strftime("%H:%M"),
                         "opens": opens, "highs": highs, "lows": lows,
                         "closes": closes, "volumes": volumes,
+                        "dates": dates if len(dates) == len(closes) else list(range(len(closes))),
                         "pe_ratio": None, "eps": None, "market_cap": None,
                         "revenue_growth": None, "debt_equity": None, "roe": None,
                         "dividend_yield": None, "52w_high": meta.get("fiftyTwoWeekHigh"),
@@ -433,7 +523,6 @@ def fetch_via_yfinance(yf_ticker, period, interval):
     except Exception as e:
         st.warning(f"Direct Yahoo error: {e}")
 
-    # Fallback to yfinance library
     if not YF_AVAILABLE:
         return None
     try:
@@ -450,6 +539,7 @@ def fetch_via_yfinance(yf_ticker, period, interval):
         lows    = clean_list(hist["Low"].tolist())
         closes  = clean_list(hist["Close"].tolist())
         volumes = clean_list(hist["Volume"].tolist())
+        dates   = [str(d)[:16] for d in hist.index.tolist()]
         curr = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
         return {
             "source": "Yahoo Finance (yfinance)",
@@ -463,6 +553,7 @@ def fetch_via_yfinance(yf_ticker, period, interval):
             "time": datetime.now().strftime("%H:%M"),
             "opens": opens, "highs": highs, "lows": lows,
             "closes": closes, "volumes": volumes,
+            "dates": dates,
             "pe_ratio":       info.get("trailingPE"),
             "eps":            info.get("trailingEps"),
             "market_cap":     info.get("marketCap"),
@@ -502,6 +593,7 @@ def fetch_via_alphavantage(av_symbol, av_func, av_interval):
             "change": curr - prev, "change_pct": ((curr-prev)/prev*100) if prev else 0,
             "time": datetime.now().strftime("%H:%M"),
             "opens": opens, "highs": highs, "lows": lows, "closes": closes, "volumes": volumes,
+            "dates": dates,
             "pe_ratio": None, "eps": None, "market_cap": None, "revenue_growth": None,
             "debt_equity": None, "roe": None, "dividend_yield": None,
             "52w_high": None, "52w_low": None, "sector": None,
@@ -545,12 +637,399 @@ def indicator_row(label, value, reading="", reading_color="#212529"):
         <span>{value} {reading_html}</span>
     </div>""", unsafe_allow_html=True)
 
+# ── FEATURE A: Bloomberg-lite Candlestick Chart ───────────────
+def render_candlestick_chart(price_data, ind, sig, ticker_name, tf_label):
+    if not PLOTLY_AVAILABLE:
+        st.warning("Plotly not installed. Run: pip install plotly")
+        return
+
+    opens   = price_data["opens"]
+    highs   = price_data["highs"]
+    lows    = price_data["lows"]
+    closes  = price_data["closes"]
+    volumes = price_data["volumes"]
+    dates   = price_data.get("dates", list(range(len(closes))))
+    curr    = price_data["current_price"]
+
+    ema50_s  = ind.get("ema50_series", [])
+    ema200_s = ind.get("ema200_series", [])
+    bb_upper, bb_mid, bb_lower = ind.get("bb_series", ([], [], []))
+
+    show_ema50  = st.session_state.chart_show_ema50
+    show_ema200 = st.session_state.chart_show_ema200
+    show_bb     = st.session_state.chart_show_bb
+    show_vol    = st.session_state.chart_show_volume
+
+    # Subplot rows: candles + volume (if shown) in shared subplots
+    row_heights = [0.72, 0.28] if show_vol else [1.0]
+    rows = 2 if show_vol else 1
+
+    fig = make_subplots(
+        rows=rows, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=row_heights,
+        subplot_titles=(None,)
+    )
+
+    # ── Candlesticks ──
+    candle_colors = {
+        "increasing_line_color": "#26a69a",
+        "decreasing_line_color": "#ef5350",
+        "increasing_fillcolor": "#26a69a",
+        "decreasing_fillcolor": "#ef5350",
+    }
+    fig.add_trace(go.Candlestick(
+        x=dates, open=opens, high=highs, low=lows, close=closes,
+        name="Price", showlegend=False,
+        increasing_line_color="#26a69a", decreasing_line_color="#ef5350",
+        increasing_fillcolor="#26a69a",  decreasing_fillcolor="#ef5350",
+        line=dict(width=1),
+    ), row=1, col=1)
+
+    # ── EMA 50 ──
+    if show_ema50 and ema50_s:
+        fig.add_trace(go.Scatter(
+            x=dates, y=ema50_s, mode="lines",
+            name="EMA 50", line=dict(color="#f59e0b", width=1.5, dash="solid"),
+            opacity=0.9,
+        ), row=1, col=1)
+
+    # ── EMA 200 ──
+    if show_ema200 and ema200_s:
+        fig.add_trace(go.Scatter(
+            x=dates, y=ema200_s, mode="lines",
+            name="EMA 200", line=dict(color="#8b5cf6", width=1.5, dash="solid"),
+            opacity=0.9,
+        ), row=1, col=1)
+
+    # ── Bollinger Bands ──
+    if show_bb and bb_upper:
+        fig.add_trace(go.Scatter(
+            x=dates, y=bb_upper, mode="lines",
+            name="BB Upper", line=dict(color="#60a5fa", width=1, dash="dash"),
+            opacity=0.7,
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=dates, y=bb_mid, mode="lines",
+            name="BB Mid", line=dict(color="#93c5fd", width=1, dash="dot"),
+            opacity=0.5,
+        ), row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=dates, y=bb_lower, mode="lines",
+            name="BB Lower", line=dict(color="#60a5fa", width=1, dash="dash"),
+            opacity=0.7,
+            fill="tonexty",
+            fillcolor="rgba(96,165,250,0.05)",
+        ), row=1, col=1)
+
+    # ── Trade level lines ──
+    sig_color_map = {
+        "STRONG BUY": "#1a7340", "BUY": "#28a745",
+        "SHORT SELL": "#dc3545", "SELL": "#e06c75",
+        "HOLD": "#007bff", "WAIT": "#ffc107"
+    }
+    sig_color = sig_color_map.get(sig["signal"], "#007bff")
+
+    fig.add_hline(y=sig["target_price"], line_dash="dash",
+                  line_color="#1a7340", line_width=1.2,
+                  annotation_text=f"Target ₹{sig['target_price']:,.0f}",
+                  annotation_position="left", row=1, col=1)
+    fig.add_hline(y=sig["stop_loss"], line_dash="dash",
+                  line_color="#dc3545", line_width=1.2,
+                  annotation_text=f"Stop ₹{sig['stop_loss']:,.0f}",
+                  annotation_position="left", row=1, col=1)
+    fig.add_hline(y=curr, line_dash="dot",
+                  line_color=sig_color, line_width=1.5,
+                  annotation_text=f"LTP ₹{curr:,.2f}",
+                  annotation_position="right", row=1, col=1)
+
+    # ── Volume bars ──
+    if show_vol:
+        vol_colors = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(closes, opens)]
+        fig.add_trace(go.Bar(
+            x=dates, y=volumes,
+            name="Volume",
+            marker_color=vol_colors,
+            marker_line_width=0,
+            opacity=0.7,
+            showlegend=True,
+        ), row=2, col=1)
+
+    # ── Layout ──
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0e1117",
+        plot_bgcolor="#0e1117",
+        font=dict(family="Inter, sans-serif", size=11, color="#c9d1d9"),
+        xaxis_rangeslider_visible=False,
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.01,
+            xanchor="left", x=0,
+            bgcolor="rgba(14,17,23,0.8)",
+            bordercolor="#30363d",
+            borderwidth=1,
+            font=dict(size=11),
+        ),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=520,
+        title=dict(
+            text=f"<b>{ticker_name}</b>  ·  {tf_label}  ·  {sig['signal']} {SIGNAL_CONFIG.get(sig['signal'], {}).get('icon', '')}",
+            font=dict(size=14, color="#e6edf3"),
+            x=0.0, xanchor="left",
+        ),
+        hoverlabel=dict(bgcolor="#161b22", font_size=12, font_color="#e6edf3"),
+        hovermode="x unified",
+    )
+
+    fig.update_xaxes(
+        gridcolor="#21262d", zerolinecolor="#30363d",
+        showgrid=True, tickfont=dict(size=10),
+    )
+    fig.update_yaxes(
+        gridcolor="#21262d", zerolinecolor="#30363d",
+        showgrid=True, tickformat=",.0f",
+        tickprefix="₹", tickfont=dict(size=10),
+    )
+
+    if show_vol:
+        fig.update_yaxes(tickprefix="", tickformat=".2s", row=2, col=1)
+
+    st.plotly_chart(fig, use_container_width=True, config={
+        "displayModeBar": True,
+        "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+        "displaylogo": False,
+    })
+
+
+# ── FEATURE A: Gauge chart for RSI ───────────────────────────
+def render_rsi_gauge(rsi_val):
+    if not PLOTLY_AVAILABLE: return
+    if rsi_val is None:
+        st.markdown("<div style='text-align:center;color:#6c757d;font-size:12px'>RSI: No data</div>", unsafe_allow_html=True)
+        return
+
+    color = "#ef5350" if rsi_val > 70 else "#26a69a" if rsi_val < 30 else "#f59e0b"
+    label = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=rsi_val,
+        domain={"x": [0, 1], "y": [0, 1]},
+        title={"text": f"RSI (14)<br><span style='font-size:11px;color:{color}'>{label}</span>",
+               "font": {"size": 13}},
+        number={"font": {"size": 22, "color": color}, "suffix": ""},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#4a5568",
+                     "tickvals": [0, 30, 50, 70, 100], "ticktext": ["0", "30", "50", "70", "100"]},
+            "bar": {"color": color, "thickness": 0.25},
+            "bgcolor": "#1a1f2e",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0, 30],   "color": "rgba(38,166,154,0.15)"},
+                {"range": [30, 70],  "color": "rgba(245,158,11,0.08)"},
+                {"range": [70, 100], "color": "rgba(239,83,80,0.15)"},
+            ],
+            "threshold": {
+                "line": {"color": color, "width": 3},
+                "thickness": 0.8,
+                "value": rsi_val,
+            },
+        },
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#c9d1d9", size=11),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=180,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ── FEATURE A: Gauge chart for Success Probability ───────────
+def render_probability_gauge(prob_val, signal):
+    if not PLOTLY_AVAILABLE: return
+    color = "#26a69a" if prob_val >= 65 else "#f59e0b" if prob_val >= 45 else "#ef5350"
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=prob_val,
+        domain={"x": [0, 1], "y": [0, 1]},
+        title={"text": "Success Probability", "font": {"size": 13}},
+        number={"font": {"size": 22, "color": color}, "suffix": "%"},
+        gauge={
+            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#4a5568",
+                     "tickvals": [0, 25, 50, 75, 100]},
+            "bar": {"color": color, "thickness": 0.25},
+            "bgcolor": "#1a1f2e",
+            "borderwidth": 0,
+            "steps": [
+                {"range": [0, 40],   "color": "rgba(239,83,80,0.15)"},
+                {"range": [40, 65],  "color": "rgba(245,158,11,0.08)"},
+                {"range": [65, 100], "color": "rgba(38,166,154,0.15)"},
+            ],
+            "threshold": {
+                "line": {"color": color, "width": 3},
+                "thickness": 0.8,
+                "value": prob_val,
+            },
+        },
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#c9d1d9", size=11),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=180,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ── FEATURE A: Donut chart for Risk:Reward ────────────────────
+def render_rr_donut(rr_ratio):
+    if not PLOTLY_AVAILABLE: return
+    risk = 1
+    reward = max(rr_ratio, 0.01)
+    color_r = "#ef5350"; color_rw = "#26a69a"
+    fig = go.Figure(go.Pie(
+        values=[risk, reward],
+        labels=["Risk", "Reward"],
+        hole=0.62,
+        marker=dict(colors=[color_r, color_rw], line=dict(color="#0e1117", width=2)),
+        textinfo="label+percent",
+        textfont=dict(size=11),
+        showlegend=False,
+        direction="clockwise",
+        sort=False,
+    ))
+    fig.add_annotation(
+        text=f"1 : {rr_ratio:.1f}",
+        x=0.5, y=0.5, showarrow=False,
+        font=dict(size=16, color="#e6edf3", family="Inter"),
+    )
+    fig.update_layout(
+        title=dict(text="Risk : Reward", font=dict(size=13), x=0.5, xanchor="center"),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#c9d1d9", size=11),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=180,
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ── FEATURE A: Sparkline for Period Return ────────────────────
+def render_period_sparkline(closes, period_return, tf_label):
+    if not PLOTLY_AVAILABLE or not closes: return
+    color = "#26a69a" if (period_return or 0) >= 0 else "#ef5350"
+    fill_color = "rgba(38,166,154,0.15)" if (period_return or 0) >= 0 else "rgba(239,83,80,0.15)"
+    x_idx = list(range(len(closes)))
+    fig = go.Figure(go.Scatter(
+        x=x_idx, y=closes, mode="lines",
+        line=dict(color=color, width=2),
+        fill="tozeroy", fillcolor=fill_color,
+        showlegend=False,
+        hovertemplate="₹%{y:,.2f}<extra></extra>",
+    ))
+    pr_text = fmt_pct(period_return) if period_return is not None else "—"
+    fig.update_layout(
+        title=dict(
+            text=f"Period Return  <span style='color:{color}'>{pr_text}</span>",
+            font=dict(size=13), x=0, xanchor="left"
+        ),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#c9d1d9", size=10),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=180,
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False, tickprefix="₹"),
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ── FEATURE B: Signal History ─────────────────────────────────
+def update_signal_history(ticker, sig_record):
+    if ticker not in st.session_state.signal_history:
+        st.session_state.signal_history[ticker] = []
+    history = st.session_state.signal_history[ticker]
+    # Avoid duplicate entry for same minute
+    if history and history[-1]["time"] == sig_record["time"]:
+        history[-1] = sig_record  # update in place
+    else:
+        history.append(sig_record)
+    # Keep last 10
+    st.session_state.signal_history[ticker] = history[-10:]
+
+def render_signal_history(ticker):
+    history = st.session_state.signal_history.get(ticker, [])
+    if not history:
+        st.caption("No signal history yet for this session. Run Analyse multiple times to build history.")
+        return
+
+    rows_html = ""
+    for i, h in enumerate(reversed(history)):
+        sig    = h["signal"]
+        sc     = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
+        badge  = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
+        chg_c  = "#26a69a" if h.get("change_pct", 0) >= 0 else "#ef5350"
+        chg_s  = "+" if h.get("change_pct", 0) >= 0 else ""
+        rows_html += f"""
+        <tr style="{'background:#f8f9fa' if i % 2 == 0 else ''}">
+            <td>{h['time']}</td>
+            <td><b>{h['tf']}</b></td>
+            <td>₹{h['price']:,.2f} <span style='color:{chg_c};font-size:11px'>({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
+            <td>{badge}</td>
+            <td style='color:{chg_c}'>{h.get('regime','—')}</td>
+            <td>₹{h.get('target',0):,.2f}</td>
+            <td>₹{h.get('stop',0):,.2f}</td>
+            <td>{h.get('prob',0):.0f}%</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <table class="history-table">
+        <thead>
+            <tr>
+                <th>Time</th><th>Timeframe</th><th>Price</th><th>Signal</th>
+                <th>Regime</th><th>Target</th><th>Stop Loss</th><th>Probability</th>
+            </tr>
+        </thead>
+        <tbody>{rows_html}</tbody>
+    </table>
+    """, unsafe_allow_html=True)
+
+
+# ── FEATURE C: Indicator Toggle Bar ──────────────────────────
+def render_chart_toggle_bar():
+    st.markdown("**📊 Chart Indicators**")
+    c1, c2, c3, c4, _, _, _ = st.columns([1.2, 1.2, 1.5, 1.2, 1, 1, 1])
+
+    with c1:
+        ema50_label = "🟡 EMA 50 ✓" if st.session_state.chart_show_ema50 else "🟡 EMA 50"
+        if st.button(ema50_label, key="toggle_ema50", use_container_width=True):
+            st.session_state.chart_show_ema50 = not st.session_state.chart_show_ema50
+            st.rerun()
+
+    with c2:
+        ema200_label = "🟣 EMA 200 ✓" if st.session_state.chart_show_ema200 else "🟣 EMA 200"
+        if st.button(ema200_label, key="toggle_ema200", use_container_width=True):
+            st.session_state.chart_show_ema200 = not st.session_state.chart_show_ema200
+            st.rerun()
+
+    with c3:
+        bb_label = "🔵 Bollinger Bands ✓" if st.session_state.chart_show_bb else "🔵 Bollinger Bands"
+        if st.button(bb_label, key="toggle_bb", use_container_width=True):
+            st.session_state.chart_show_bb = not st.session_state.chart_show_bb
+            st.rerun()
+
+    with c4:
+        vol_label = "📊 Volume ✓" if st.session_state.chart_show_volume else "📊 Volume"
+        if st.button(vol_label, key="toggle_vol", use_container_width=True):
+            st.session_state.chart_show_volume = not st.session_state.chart_show_volume
+            st.rerun()
+
+
 # ── Main App ──────────────────────────────────────────────────
 def main():
-    # ── Sidebar ───────────────────────────────────────────────
     with st.sidebar:
         st.markdown("## 🐂 MB Stock Intelligence")
-        st.markdown("*Free Edition — No API Key*")
+        st.markdown("*Enhanced Edition — Bloomberg-lite*")
         st.markdown("---")
 
         industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
@@ -584,25 +1063,37 @@ def main():
         st.caption("Data: Yahoo Finance + Alpha Vantage")
         st.caption("Signals: RSI · MACD · EMA · Bollinger · ATR · Stochastic")
 
-    # ── Main content ──────────────────────────────────────────
+        # Signal history clear button
+        if st.button("🗑️ Clear Signal History", use_container_width=True):
+            st.session_state.signal_history = {}
+            st.success("History cleared")
+
+    # ── Header ────────────────────────────────────────────────
     st.markdown("""
 <div style="display:flex;align-items:center;gap:16px;margin-bottom:0.5rem">
     <div style="font-size:52px;line-height:1">🐂</div>
     <div>
         <div style="font-size:28px;font-weight:700;line-height:1.1">MB Stock Intelligence</div>
-        <div style="font-size:13px;color:#6c757d">Live NSE prices · Indicator confluence · Telegram alerts</div>
+        <div style="font-size:13px;color:#6c757d">Live NSE prices · Bloomberg-lite charts · Telegram alerts</div>
     </div>
     <div style="margin-left:auto;background:#1a7340;color:white;padding:4px 14px;
-                border-radius:20px;font-size:12px;font-weight:600">MB</div>
+                border-radius:20px;font-size:12px;font-weight:600">MB Enhanced</div>
 </div>
 <hr style="margin:0.5rem 0 1rem 0">
 """, unsafe_allow_html=True)
-    st.caption("Live NSE prices · Rule-based indicator confluence · Telegram alerts · Free edition")
 
     if not analyse:
         st.info("👈 Select a stock and timeframe from the sidebar, then click **Analyse**")
         st.markdown("""
-        **How it works:**
+        **What's new in Enhanced Edition:**
+        - 📈 **Bloomberg-lite chart** — Candlesticks + EMA 50/200 + Bollinger Bands + Volume in one Plotly chart
+        - 🎛️ **Show/Hide toggles** — Control which indicators appear on the chart
+        - 🔵 **Gauge charts** — RSI and Success Probability as visual dials
+        - 🍩 **Donut chart** — Risk:Reward ratio visualised
+        - 📉 **Sparkline** — Period return price trace
+        - 🕐 **Signal History** — Last 10 signals per stock tracked automatically
+
+        **How the signals work:**
         - Fetches real OHLC data from Yahoo Finance (Alpha Vantage as fallback)
         - Computes RSI, MACD, Bollinger Bands, EMA 50/200, ATR, Stochastic in real time
         - Signal engine weighs all indicators to generate: **STRONG BUY / BUY / SHORT SELL / SELL / HOLD / WAIT**
@@ -633,6 +1124,20 @@ def main():
     rsi     = ind["rsi"]
     ema50   = ind["ema50"]
     ema200  = ind["ema200"]
+
+    # ── Save to signal history ────────────────────────────────
+    now_str = datetime.now().strftime("%H:%M:%S")
+    update_signal_history(ticker, {
+        "time":       now_str,
+        "tf":         tf["label"],
+        "price":      curr,
+        "change_pct": price_data["change_pct"],
+        "signal":     signal,
+        "regime":     sig["regime"],
+        "target":     sig["target_price"],
+        "stop":       sig["stop_loss"],
+        "prob":       sig["success_prob"],
+    })
 
     # ── Live price strip ──────────────────────────────────────
     chg_color = "#1a7340" if chg_up else "#721c24"
@@ -689,15 +1194,25 @@ def main():
     with c4: metric_card("Risk : Reward", f"1 : {sig['rr_ratio']:.2f}")
 
     st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
-    pr = ind["period_return"]
-    with c1: metric_card("Profit Potential",  f"+{sig['profit_potential']:.1f}%",
-                          sub=f"over {sig['hold_duration']}", value_color="#1a7340")
-    with c2: metric_card("Success Probability", f"{sig['success_prob']:.0f}%",
-                          sub="indicator confluence", value_color="#004085")
-    with c3: metric_card("Period Return", fmt_pct(pr),
-                          value_color="#1a7340" if pr and pr >= 0 else "#721c24")
-    with c4: metric_card("Hold Duration", sig["hold_duration"])
+
+    # ── FEATURE A: Mini visual metrics row ────────────────────
+    st.markdown("### 📊 Visual Metrics")
+    gm1, gm2, gm3, gm4 = st.columns(4)
+    with gm1:
+        render_rsi_gauge(rsi)
+    with gm2:
+        render_probability_gauge(sig["success_prob"], signal)
+    with gm3:
+        render_rr_donut(sig["rr_ratio"])
+    with gm4:
+        render_period_sparkline(price_data["closes"], ind["period_return"], tf["label"])
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── FEATURE A+C: Bloomberg-lite Chart with toggles ────────
+    st.markdown("### 📈 Bloomberg-lite Chart")
+    render_chart_toggle_bar()
+    render_candlestick_chart(price_data, ind, sig, stock["fullName"], tf["label"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -729,7 +1244,8 @@ def main():
         indicator_row("EMA 200",         fmt_inr(ema200), *ema_read)
         indicator_row("ATR (14)",        fmt_inr(ind["atr"]), "Volatility")
         indicator_row("Stochastic K",    sk_val, *sk_read)
-        indicator_row("Period Return",   fmt_pct(ind["period_return"]),
+        pr = ind["period_return"]
+        indicator_row("Period Return",   fmt_pct(pr),
                        "▲" if pr and pr >= 0 else "▼",
                        "#1a7340" if pr and pr >= 0 else "#721c24")
         indicator_row("Volume Trend",    ind["volume_trend"])
@@ -761,8 +1277,16 @@ def main():
         indicator_row("Data Source",     price_data["source"])
         indicator_row("Last Updated",    price_data["time"] + " IST")
 
-    # ── Telegram alert ────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── FEATURE B: Signal History Table ──────────────────────
+    st.markdown("### 🕐 Signal History — Last 10 Signals")
+    st.caption(f"Session history for **{stock['fullName']}** — refreshes each time you click Analyse")
+    render_signal_history(ticker)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Telegram alert ────────────────────────────────────────
     if curr >= sig["target_price"] * 0.98:
         msg = (
             f"Target Alert — {ticker}\n\n"
