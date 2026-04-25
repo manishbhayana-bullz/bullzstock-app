@@ -637,7 +637,7 @@ def indicator_row(label, value, reading="", reading_color="#212529"):
         <span>{value} {reading_html}</span>
     </div>""", unsafe_allow_html=True)
 
-# ── FEATURE A: Bloomberg-lite Candlestick Chart ───────────────
+# ── FEATURE A: TradingView-style Multi-panel Chart ────────────
 def render_candlestick_chart(price_data, ind, sig, ticker_name, tf_label):
     if not PLOTLY_AVAILABLE:
         st.warning("Plotly not installed. Run: pip install plotly")
@@ -650,298 +650,252 @@ def render_candlestick_chart(price_data, ind, sig, ticker_name, tf_label):
     volumes = price_data["volumes"]
     dates   = price_data.get("dates", list(range(len(closes))))
     curr    = price_data["current_price"]
+    n       = len(closes)
 
-    ema50_s  = ind.get("ema50_series", [])
-    ema200_s = ind.get("ema200_series", [])
-    bb_upper, bb_mid, bb_lower = ind.get("bb_series", ([], [], []))
+    ema50_s  = ind.get("ema50_series", [None]*n)
+    ema200_s = ind.get("ema200_series", [None]*n)
+    bb_upper, bb_mid, bb_lower = ind.get("bb_series", ([None]*n, [None]*n, [None]*n))
 
     show_ema50  = st.session_state.chart_show_ema50
     show_ema200 = st.session_state.chart_show_ema200
     show_bb     = st.session_state.chart_show_bb
-    show_vol    = st.session_state.chart_show_volume
 
-    # Subplot rows: candles + volume (if shown) in shared subplots
-    row_heights = [0.72, 0.28] if show_vol else [1.0]
-    rows = 2 if show_vol else 1
+    # RSI series for sub-panel
+    rsi_series = [None]*14
+    for i in range(14, n):
+        rsi_series.append(calc_rsi(closes[:i+1]))
+
+    # MACD histogram series for sub-panel
+    macd_hist_series = [None]*26
+    for i in range(26, n):
+        r = calc_macd(closes[:i+1])
+        macd_hist_series.append(r["hist"])
+
+    BG    = "#131722"
+    GRID  = "#1e222d"
+    TEXT  = "#d1d4dc"
+    UP    = "#26a69a"
+    DOWN  = "#ef5350"
 
     fig = make_subplots(
-        rows=rows, cols=1,
+        rows=4, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=row_heights,
-        subplot_titles=(None,)
+        vertical_spacing=0.012,
+        row_heights=[0.52, 0.16, 0.16, 0.16],
     )
 
-    # ── Candlesticks ──
-    candle_colors = {
-        "increasing_line_color": "#26a69a",
-        "decreasing_line_color": "#ef5350",
-        "increasing_fillcolor": "#26a69a",
-        "decreasing_fillcolor": "#ef5350",
-    }
+    # Row 1: Candlesticks
     fig.add_trace(go.Candlestick(
         x=dates, open=opens, high=highs, low=lows, close=closes,
-        name="Price", showlegend=False,
-        increasing_line_color="#26a69a", decreasing_line_color="#ef5350",
-        increasing_fillcolor="#26a69a",  decreasing_fillcolor="#ef5350",
-        line=dict(width=1),
+        name="Price",
+        increasing=dict(line=dict(color=UP, width=1), fillcolor=UP),
+        decreasing=dict(line=dict(color=DOWN, width=1), fillcolor=DOWN),
+        showlegend=False, whiskerwidth=0.3,
     ), row=1, col=1)
 
-    # ── EMA 50 ──
-    if show_ema50 and ema50_s:
+    if show_ema50 and any(v is not None for v in ema50_s):
         fig.add_trace(go.Scatter(
-            x=dates, y=ema50_s, mode="lines",
-            name="EMA 50", line=dict(color="#f59e0b", width=1.5, dash="solid"),
-            opacity=0.9,
+            x=dates, y=ema50_s, mode="lines", name="EMA 50",
+            line=dict(color="#f9a825", width=1.4), connectgaps=True,
         ), row=1, col=1)
 
-    # ── EMA 200 ──
-    if show_ema200 and ema200_s:
+    if show_ema200 and any(v is not None for v in ema200_s):
         fig.add_trace(go.Scatter(
-            x=dates, y=ema200_s, mode="lines",
-            name="EMA 200", line=dict(color="#8b5cf6", width=1.5, dash="solid"),
-            opacity=0.9,
+            x=dates, y=ema200_s, mode="lines", name="EMA 200",
+            line=dict(color="#7b1fa2", width=1.4), connectgaps=True,
         ), row=1, col=1)
 
-    # ── Bollinger Bands ──
-    if show_bb and bb_upper:
+    if show_bb and any(v is not None for v in bb_upper):
         fig.add_trace(go.Scatter(
-            x=dates, y=bb_upper, mode="lines",
-            name="BB Upper", line=dict(color="#60a5fa", width=1, dash="dash"),
-            opacity=0.7,
+            x=dates, y=bb_upper, mode="lines", name="BB Upper",
+            line=dict(color="#2196f3", width=1, dash="dot"),
+            connectgaps=True, showlegend=True,
         ), row=1, col=1)
         fig.add_trace(go.Scatter(
-            x=dates, y=bb_mid, mode="lines",
-            name="BB Mid", line=dict(color="#93c5fd", width=1, dash="dot"),
-            opacity=0.5,
+            x=dates, y=bb_mid, mode="lines", name="BB Mid",
+            line=dict(color="#2196f3", width=0.8, dash="dot"),
+            connectgaps=True, showlegend=False, opacity=0.5,
         ), row=1, col=1)
         fig.add_trace(go.Scatter(
-            x=dates, y=bb_lower, mode="lines",
-            name="BB Lower", line=dict(color="#60a5fa", width=1, dash="dash"),
-            opacity=0.7,
-            fill="tonexty",
-            fillcolor="rgba(96,165,250,0.05)",
+            x=dates, y=bb_lower, mode="lines", name="BB Lower",
+            line=dict(color="#2196f3", width=1, dash="dot"),
+            fill="tonexty", fillcolor="rgba(33,150,243,0.04)",
+            connectgaps=True, showlegend=False,
         ), row=1, col=1)
 
-    # ── Trade level lines ──
-    sig_color_map = {
-        "STRONG BUY": "#1a7340", "BUY": "#28a745",
-        "SHORT SELL": "#dc3545", "SELL": "#e06c75",
-        "HOLD": "#007bff", "WAIT": "#ffc107"
-    }
-    sig_color = sig_color_map.get(sig["signal"], "#007bff")
+    sig_colors = {"STRONG BUY": UP, "BUY": UP, "SHORT SELL": DOWN,
+                  "SELL": DOWN, "HOLD": "#2196f3", "WAIT": "#f9a825"}
+    sig_color = sig_colors.get(sig["signal"], "#2196f3")
 
-    fig.add_hline(y=sig["target_price"], line_dash="dash",
-                  line_color="#1a7340", line_width=1.2,
-                  annotation_text=f"Target ₹{sig['target_price']:,.0f}",
-                  annotation_position="left", row=1, col=1)
-    fig.add_hline(y=sig["stop_loss"], line_dash="dash",
-                  line_color="#dc3545", line_width=1.2,
-                  annotation_text=f"Stop ₹{sig['stop_loss']:,.0f}",
-                  annotation_position="left", row=1, col=1)
-    fig.add_hline(y=curr, line_dash="dot",
-                  line_color=sig_color, line_width=1.5,
-                  annotation_text=f"LTP ₹{curr:,.2f}",
-                  annotation_position="right", row=1, col=1)
+    for level, color, label in [
+        (sig["target_price"], UP,        f"  TGT \u20b9{sig['target_price']:,.0f}"),
+        (sig["stop_loss"],    DOWN,      f"  SL \u20b9{sig['stop_loss']:,.0f}"),
+        (curr,                sig_color, f"  LTP \u20b9{curr:,.2f}"),
+    ]:
+        fig.add_shape(type="line", x0=0, x1=1, y0=level, y1=level,
+                      xref="paper", yref="y1",
+                      line=dict(color=color, width=1, dash="dash"))
+        fig.add_annotation(x=1, y=level, xref="paper", yref="y1",
+                           text=label, showarrow=False,
+                           font=dict(size=10, color=color),
+                           xanchor="left", bgcolor=BG, borderpad=2)
 
-    # ── Volume bars ──
-    if show_vol:
-        vol_colors = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(closes, opens)]
-        fig.add_trace(go.Bar(
-            x=dates, y=volumes,
-            name="Volume",
-            marker_color=vol_colors,
-            marker_line_width=0,
-            opacity=0.7,
-            showlegend=True,
-        ), row=2, col=1)
+    # Row 2: Volume
+    vol_colors = [UP if c >= o else DOWN for c, o in zip(closes, opens)]
+    fig.add_trace(go.Bar(
+        x=dates, y=volumes, name="Volume",
+        marker=dict(color=vol_colors, line=dict(width=0)),
+        opacity=0.8, showlegend=False,
+    ), row=2, col=1)
 
-    # ── Layout ──
+    # Row 3: RSI
+    fig.add_trace(go.Scatter(
+        x=dates, y=rsi_series, mode="lines", name="RSI",
+        line=dict(color="#7e57c2", width=1.2),
+        connectgaps=True, showlegend=False,
+        hovertemplate="RSI: %{y:.1f}<extra></extra>",
+    ), row=3, col=1)
+    for level, lcolor in [(70, "rgba(239,83,80,0.35)"), (50, "rgba(120,123,134,0.3)"), (30, "rgba(38,166,154,0.35)")]:
+        fig.add_shape(type="line", x0=0, x1=1, y0=level, y1=level,
+                      xref="paper", yref="y3",
+                      line=dict(color=lcolor, width=0.8, dash="dot"))
+
+    # Row 4: MACD histogram
+    macd_bar_colors = [UP if (v or 0) >= 0 else DOWN for v in macd_hist_series]
+    fig.add_trace(go.Bar(
+        x=dates, y=macd_hist_series, name="MACD",
+        marker=dict(color=macd_bar_colors, line=dict(width=0)),
+        opacity=0.8, showlegend=False,
+        hovertemplate="MACD: %{y:.4f}<extra></extra>",
+    ), row=4, col=1)
+
+    axis_style = dict(
+        gridcolor=GRID, zerolinecolor=GRID, showgrid=True, zeroline=False,
+        tickfont=dict(size=10, color="#787b86"), tickcolor="#787b86",
+        side="right", showline=False, ticks="outside", ticklen=4,
+    )
+
     fig.update_layout(
         template="plotly_dark",
-        paper_bgcolor="#0e1117",
-        plot_bgcolor="#0e1117",
-        font=dict(family="Inter, sans-serif", size=11, color="#c9d1d9"),
+        paper_bgcolor=BG, plot_bgcolor=BG,
+        font=dict(family="'Trebuchet MS', sans-serif", size=11, color=TEXT),
         xaxis_rangeslider_visible=False,
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor="#1e222d", font_size=11, font_color=TEXT, bordercolor="#434651"),
+        height=680,
+        margin=dict(l=0, r=90, t=36, b=0),
         legend=dict(
-            orientation="h", yanchor="bottom", y=1.01,
-            xanchor="left", x=0,
-            bgcolor="rgba(14,17,23,0.8)",
-            bordercolor="#30363d",
-            borderwidth=1,
-            font=dict(size=11),
+            orientation="h", x=0, y=1.01, xanchor="left", yanchor="bottom",
+            bgcolor="rgba(0,0,0,0)", font=dict(size=10, color=TEXT),
         ),
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=520,
         title=dict(
-            text=f"<b>{ticker_name}</b>  ·  {tf_label}  ·  {sig['signal']} {SIGNAL_CONFIG.get(sig['signal'], {}).get('icon', '')}",
-            font=dict(size=14, color="#e6edf3"),
+            text=f"<b>{ticker_name}</b>  \u00b7  {tf_label}  \u00b7  "
+                 f"<span style='color:{sig_color}'>{sig['signal']} "
+                 f"{SIGNAL_CONFIG.get(sig['signal'], {}).get('icon', '')}</span>",
+            font=dict(size=13, color=TEXT),
             x=0.0, xanchor="left",
         ),
-        hoverlabel=dict(bgcolor="#161b22", font_size=12, font_color="#e6edf3"),
-        hovermode="x unified",
     )
 
-    fig.update_xaxes(
-        gridcolor="#21262d", zerolinecolor="#30363d",
-        showgrid=True, tickfont=dict(size=10),
-    )
-    fig.update_yaxes(
-        gridcolor="#21262d", zerolinecolor="#30363d",
-        showgrid=True, tickformat=",.0f",
-        tickprefix="₹", tickfont=dict(size=10),
-    )
-
-    if show_vol:
-        fig.update_yaxes(tickprefix="", tickformat=".2s", row=2, col=1)
+    price_range = [min(lows) * 0.997, max(highs) * 1.003]
+    fig.update_yaxes(**axis_style, tickprefix="\u20b9", tickformat=",.0f", range=price_range, row=1, col=1)
+    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".2s", row=2, col=1)
+    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".0f", range=[0, 100], row=3, col=1)
+    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".3f", row=4, col=1)
+    fig.update_xaxes(gridcolor=GRID, showgrid=True, tickfont=dict(size=10, color="#787b86"),
+                     showline=False, zeroline=False, tickcolor="#787b86", rangeslider_visible=False)
+    for r in [1, 2, 3]:
+        fig.update_xaxes(showticklabels=False, row=r, col=1)
 
     st.plotly_chart(fig, use_container_width=True, config={
         "displayModeBar": True,
-        "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+        "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
         "displaylogo": False,
+        "scrollZoom": True,
     })
 
 
-# ── FEATURE A: Gauge chart for RSI ───────────────────────────
-def render_rsi_gauge(rsi_val):
-    if not PLOTLY_AVAILABLE: return
-    if rsi_val is None:
-        st.markdown("<div style='text-align:center;color:#6c757d;font-size:12px'>RSI: No data</div>", unsafe_allow_html=True)
-        return
+# ── FEATURE A: Visual Metrics — pure HTML/SVG (no Plotly bg issues) ──
+def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return, signal):
+    rsi_color = "#ef5350" if (rsi_val or 50) > 70 else "#26a69a" if (rsi_val or 50) < 30 else "#f9a825"
+    rsi_label = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
+    rsi_display = f"{rsi_val:.1f}" if rsi_val else "—"
 
-    color = "#ef5350" if rsi_val > 70 else "#26a69a" if rsi_val < 30 else "#f59e0b"
-    label = "Overbought" if rsi_val > 70 else "Oversold" if rsi_val < 30 else "Neutral"
+    prob_color = "#26a69a" if prob_val >= 65 else "#f9a825" if prob_val >= 45 else "#ef5350"
+    rr_color   = "#26a69a" if rr_ratio >= 2 else "#f9a825" if rr_ratio >= 1 else "#ef5350"
+    pr_color   = "#26a69a" if (period_return or 0) >= 0 else "#ef5350"
+    pr_text    = fmt_pct(period_return) if period_return is not None else "—"
 
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=rsi_val,
-        domain={"x": [0, 1], "y": [0, 1]},
-        title={"text": f"RSI (14)<br><span style='font-size:11px;color:{color}'>{label}</span>",
-               "font": {"size": 13}},
-        number={"font": {"size": 22, "color": color}, "suffix": ""},
-        gauge={
-            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#4a5568",
-                     "tickvals": [0, 30, 50, 70, 100], "ticktext": ["0", "30", "50", "70", "100"]},
-            "bar": {"color": color, "thickness": 0.25},
-            "bgcolor": "#1a1f2e",
-            "borderwidth": 0,
-            "steps": [
-                {"range": [0, 30],   "color": "rgba(38,166,154,0.15)"},
-                {"range": [30, 70],  "color": "rgba(245,158,11,0.08)"},
-                {"range": [70, 100], "color": "rgba(239,83,80,0.15)"},
-            ],
-            "threshold": {
-                "line": {"color": color, "width": 3},
-                "thickness": 0.8,
-                "value": rsi_val,
-            },
-        },
-    ))
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#c9d1d9", size=11),
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=180,
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    def half_gauge_html(value, max_val, color, label, display_val, sublabel):
+        pct = min(value / max_val, 1.0)
+        angle = pct * 180 - 180
+        rad = math.radians(angle)
+        nx = 60 + 38 * math.cos(rad)
+        ny = 52 + 38 * math.sin(rad)
+        ex = 60 + 50 * math.cos(math.radians(pct * 180 - 180))
+        ey = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
+        large = 1 if pct > 0.5 else 0
+        return f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
+            text-align:center;border:1px solid #2a2e39">
+          <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">{label}</div>
+          <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:140px">
+            <path d="M 10 52 A 50 50 0 0 1 110 52" fill="none" stroke="#2a2e39" stroke-width="8" stroke-linecap="round"/>
+            <path d="M 10 52 A 50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}"
+                  stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+            <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="60" cy="52" r="3" fill="{color}"/>
+          </svg>
+          <div style="font-size:20px;font-weight:700;color:{color};margin-top:-4px">{display_val}</div>
+          <div style="font-size:11px;color:#787b86;margin-top:2px">{sublabel}</div>
+        </div>"""
 
+    rsi_html  = half_gauge_html(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_display, rsi_label)
+    prob_html = half_gauge_html(prob_val, 100, prob_color, "Success Probability", f"{prob_val:.0f}%",
+                                "High" if prob_val >= 65 else "Medium" if prob_val >= 45 else "Low")
 
-# ── FEATURE A: Gauge chart for Success Probability ───────────
-def render_probability_gauge(prob_val, signal):
-    if not PLOTLY_AVAILABLE: return
-    color = "#26a69a" if prob_val >= 65 else "#f59e0b" if prob_val >= 45 else "#ef5350"
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=prob_val,
-        domain={"x": [0, 1], "y": [0, 1]},
-        title={"text": "Success Probability", "font": {"size": 13}},
-        number={"font": {"size": 22, "color": color}, "suffix": "%"},
-        gauge={
-            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "#4a5568",
-                     "tickvals": [0, 25, 50, 75, 100]},
-            "bar": {"color": color, "thickness": 0.25},
-            "bgcolor": "#1a1f2e",
-            "borderwidth": 0,
-            "steps": [
-                {"range": [0, 40],   "color": "rgba(239,83,80,0.15)"},
-                {"range": [40, 65],  "color": "rgba(245,158,11,0.08)"},
-                {"range": [65, 100], "color": "rgba(38,166,154,0.15)"},
-            ],
-            "threshold": {
-                "line": {"color": color, "width": 3},
-                "thickness": 0.8,
-                "value": prob_val,
-            },
-        },
-    ))
-    fig.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#c9d1d9", size=11),
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=180,
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    total = 1 + max(rr_ratio, 0.01)
+    circ  = 2 * math.pi * 30
+    risk_dash = (1 / total) * circ
+    rew_dash  = (max(rr_ratio, 0.01) / total) * circ
+    rr_html = f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
+        text-align:center;border:1px solid #2a2e39">
+      <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">Risk : Reward</div>
+      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:80px;margin:4px auto;display:block">
+        <circle cx="40" cy="40" r="30" fill="none" stroke="#ef5350" stroke-width="10"
+                stroke-dasharray="{risk_dash:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
+        <circle cx="40" cy="40" r="30" fill="none" stroke="#26a69a" stroke-width="10"
+                stroke-dasharray="{rew_dash:.1f} {circ:.1f}" stroke-dashoffset="{-risk_dash:.1f}" transform="rotate(-90 40 40)"/>
+        <text x="40" y="37" text-anchor="middle" font-size="9" fill="{rr_color}" font-weight="bold">1:{rr_ratio:.1f}</text>
+        <text x="40" y="49" text-anchor="middle" font-size="7" fill="#787b86">R:R</text>
+      </svg>
+      <div style="font-size:11px;color:{rr_color};margin-top:2px">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1-2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
+    </div>"""
 
+    spark_svg = ""
+    if closes and len(closes) > 1:
+        mn, mx = min(closes), max(closes)
+        rng = mx - mn if mx != mn else 1
+        w, h = 200, 44
+        pts = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
+        spark_svg = f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg"
+            style="width:100%;height:48px;display:block">
+          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8"/>
+        </svg>"""
 
-# ── FEATURE A: Donut chart for Risk:Reward ────────────────────
-def render_rr_donut(rr_ratio):
-    if not PLOTLY_AVAILABLE: return
-    risk = 1
-    reward = max(rr_ratio, 0.01)
-    color_r = "#ef5350"; color_rw = "#26a69a"
-    fig = go.Figure(go.Pie(
-        values=[risk, reward],
-        labels=["Risk", "Reward"],
-        hole=0.62,
-        marker=dict(colors=[color_r, color_rw], line=dict(color="#0e1117", width=2)),
-        textinfo="label+percent",
-        textfont=dict(size=11),
-        showlegend=False,
-        direction="clockwise",
-        sort=False,
-    ))
-    fig.add_annotation(
-        text=f"1 : {rr_ratio:.1f}",
-        x=0.5, y=0.5, showarrow=False,
-        font=dict(size=16, color="#e6edf3", family="Inter"),
-    )
-    fig.update_layout(
-        title=dict(text="Risk : Reward", font=dict(size=13), x=0.5, xanchor="center"),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#c9d1d9", size=11),
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=180,
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    spark_html = f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
+        text-align:center;border:1px solid #2a2e39">
+      <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">Period Return</div>
+      <div style="padding:2px 8px 0">{spark_svg}</div>
+      <div style="font-size:20px;font-weight:700;color:{pr_color};margin-top:4px">{pr_text}</div>
+      <div style="font-size:11px;color:#787b86;margin-top:2px">{'Positive' if (period_return or 0) >= 0 else 'Negative'} trend</div>
+    </div>"""
 
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.markdown(rsi_html,   unsafe_allow_html=True)
+    with c2: st.markdown(prob_html,  unsafe_allow_html=True)
+    with c3: st.markdown(rr_html,    unsafe_allow_html=True)
+    with c4: st.markdown(spark_html, unsafe_allow_html=True)
 
-# ── FEATURE A: Sparkline for Period Return ────────────────────
-def render_period_sparkline(closes, period_return, tf_label):
-    if not PLOTLY_AVAILABLE or not closes: return
-    color = "#26a69a" if (period_return or 0) >= 0 else "#ef5350"
-    fill_color = "rgba(38,166,154,0.15)" if (period_return or 0) >= 0 else "rgba(239,83,80,0.15)"
-    x_idx = list(range(len(closes)))
-    fig = go.Figure(go.Scatter(
-        x=x_idx, y=closes, mode="lines",
-        line=dict(color=color, width=2),
-        fill="tozeroy", fillcolor=fill_color,
-        showlegend=False,
-        hovertemplate="₹%{y:,.2f}<extra></extra>",
-    ))
-    pr_text = fmt_pct(period_return) if period_return is not None else "—"
-    fig.update_layout(
-        title=dict(
-            text=f"Period Return  <span style='color:{color}'>{pr_text}</span>",
-            font=dict(size=13), x=0, xanchor="left"
-        ),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#c9d1d9", size=10),
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=180,
-        xaxis=dict(visible=False),
-        yaxis=dict(visible=False, tickprefix="₹"),
-    )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ── FEATURE B: Signal History ─────────────────────────────────
@@ -1195,17 +1149,10 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── FEATURE A: Mini visual metrics row ────────────────────
+    # ── FEATURE A: Visual Metrics row ────────────────────────
     st.markdown("### 📊 Visual Metrics")
-    gm1, gm2, gm3, gm4 = st.columns(4)
-    with gm1:
-        render_rsi_gauge(rsi)
-    with gm2:
-        render_probability_gauge(sig["success_prob"], signal)
-    with gm3:
-        render_rr_donut(sig["rr_ratio"])
-    with gm4:
-        render_period_sparkline(price_data["closes"], ind["period_return"], tf["label"])
+    render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
+                          price_data["closes"], ind["period_return"], signal)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
