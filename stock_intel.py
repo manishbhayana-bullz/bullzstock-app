@@ -1,24 +1,11 @@
 #!/usr/bin/env python3
 """
-============================================================
-MB Stock Intelligence — Enhanced Edition
-============================================================
-Enhancements:
-  A. Bloomberg-lite candlestick chart with EMA 50/200, Bollinger Bands,
-     volume bars — all in one interactive Plotly chart
-     + Gauge charts for RSI and Success Probability
-     + Donut chart for Risk:Reward ratio
-     + Sparkline for Period Return
-  B. Signal history table — last 10 signals per stock (session memory)
-  C. Show/Hide toggle buttons for chart indicators
-
-Run with:
-    streamlit run MB_Stock_Enhanced.py
-============================================================
+MB Stock Intelligence — v3
+Fixes: theme-aware UI, TradingView embed chart, signal reasoning,
+       polished sidebar, fundamentals fallback, news reference link
 """
 
 import math
-import json
 import requests
 import streamlit as st
 from datetime import datetime
@@ -48,94 +35,108 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────
+# ── Theme-aware CSS (works on both light & dark Streamlit themes) ──
 st.markdown("""
 <style>
-    .main { padding: 1rem 2rem; }
-    .metric-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 16px 20px;
-        border: 1px solid #e9ecef;
-        text-align: center;
-    }
-    .metric-label {
-        font-size: 12px;
-        color: #6c757d;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 4px;
-    }
-    .metric-value {
-        font-size: 22px;
-        font-weight: 600;
-        margin: 0;
-    }
-    .metric-sub {
-        font-size: 11px;
-        color: #6c757d;
-        margin-top: 2px;
-    }
-    .signal-box {
-        border-radius: 12px;
-        padding: 20px 24px;
-        margin-bottom: 1rem;
-    }
-    .vote-item {
-        font-size: 13px;
-        padding: 3px 0;
-        color: #495057;
-    }
-    .indicator-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 6px 0;
-        border-bottom: 1px solid #f0f0f0;
-        font-size: 13px;
-    }
-    .badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 500;
-    }
-    .disclaimer {
-        font-size: 11px;
-        color: #999;
-        margin-top: 1rem;
-        padding: 10px;
-        background: #f8f9fa;
-        border-radius: 8px;
-    }
-    .chart-toggle-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        padding: 10px 0;
-        margin-bottom: 8px;
-    }
-    .history-table {
-        font-size: 12px;
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .history-table th {
-        background: #f1f3f5;
-        padding: 6px 10px;
-        text-align: left;
-        font-weight: 600;
-        font-size: 11px;
-        text-transform: uppercase;
-        color: #6c757d;
-        border-bottom: 2px solid #dee2e6;
-    }
-    .history-table td {
-        padding: 6px 10px;
-        border-bottom: 1px solid #f0f0f0;
-        font-size: 12px;
-    }
+  /* Metric cards — transparent so they inherit Streamlit's theme */
+  .mb-card {
+    background: var(--background-color, transparent);
+    border: 1px solid var(--secondary-background-color, #e9ecef);
+    border-radius: 10px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .mb-card-label {
+    font-size: 11px;
+    color: var(--text-color-muted, #6c757d);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .mb-card-value {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .mb-card-sub {
+    font-size: 11px;
+    color: var(--text-color-muted, #6c757d);
+    margin-top: 3px;
+  }
+  /* Signal box */
+  .signal-box {
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 1rem;
+  }
+  .vote-item { font-size: 13px; padding: 2px 0; }
+  /* Indicator rows */
+  .ind-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--secondary-background-color, #f0f0f0);
+    font-size: 13px;
+  }
+  .ind-label { color: var(--text-color-muted, #6c757d); }
+  /* Sidebar stock card */
+  .sb-stock-card {
+    background: var(--secondary-background-color, #f8f9fa);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 6px 0;
+    border-left: 3px solid #1a7340;
+    font-size: 12px;
+  }
+  /* Signal reasoning box */
+  .reasoning-box {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 8px 0;
+    background: var(--secondary-background-color, #f8f9fa);
+    border: 1px solid var(--secondary-background-color, #e9ecef);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  /* Visual metric cards — theme-aware dark-style panels */
+  .vm-card {
+    border-radius: 10px;
+    padding: 14px 10px 10px;
+    text-align: center;
+    border: 1px solid var(--secondary-background-color, #e0e0e0);
+    background: var(--secondary-background-color, #f8f9fa);
+  }
+  .vm-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-color-muted, #6c757d);
+    margin-bottom: 6px;
+  }
+  .vm-value {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 4px 0 2px;
+  }
+  .vm-sub {
+    font-size: 11px;
+    color: var(--text-color-muted, #6c757d);
+  }
+  .disclaimer {
+    font-size: 11px;
+    color: var(--text-color-muted, #999);
+    margin-top: 1rem;
+    padding: 10px 14px;
+    background: var(--secondary-background-color, #f8f9fa);
+    border-radius: 8px;
+  }
+  /* Toggle buttons */
+  div[data-testid="column"] button {
+    border-radius: 20px !important;
+    font-size: 12px !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -144,23 +145,28 @@ AV_KEY   = "415951HNPFTK2N7U"
 TG_TOKEN = "8726706025:AAF89ngZqHp4-3H1pkIrUaxm5pj_4sNCIxM"
 TG_CHAT  = "6946313879"
 
+INDUSTRY_ICONS = {
+    "IT": "💻", "Banking": "🏦", "FMCG": "🛒", "Fintech": "💳",
+    "Automobile": "🚗", "Defence": "🛡️", "Retail/QSR": "🍕", "All": "📊",
+}
+
 STOCKS = {
-    "PFOCUS":     {"name": "PI Focus",       "industry": "IT",         "yf": "PFOCUS.NS",     "av": "PFOCUS",     "fullName": "Photon Infotech Focus"},
-    "HDFCBANK":   {"name": "HDFC Bank",      "industry": "Banking",    "yf": "HDFCBANK.NS",   "av": "HDFCBANK",   "fullName": "HDFC Bank Ltd."},
-    "ITC":        {"name": "ITC Ltd.",        "industry": "FMCG",       "yf": "ITC.NS",        "av": "ITC",        "fullName": "ITC Limited"},
-    "PNB":        {"name": "PNB",            "industry": "Banking",    "yf": "PNB.NS",        "av": "PNB",        "fullName": "Punjab National Bank"},
-    "PAYTM":      {"name": "Paytm",          "industry": "Fintech",    "yf": "PAYTM.NS",      "av": "PAYTM",      "fullName": "One97 Communications"},
-    "TATAMOTORS": {"name": "Tata Motors",    "industry": "Automobile", "yf": "TATAMOTORS.NS", "av": "TATAMOTORS", "fullName": "Tata Motors Ltd."},
-    "HAL":        {"name": "HAL",            "industry": "Defence",    "yf": "HAL.NS",        "av": "HAL",        "fullName": "Hindustan Aeronautics Ltd."},
-    "JUBLFOOD":   {"name": "Jubilant Foods", "industry": "Retail/QSR", "yf": "JUBLFOOD.NS",   "av": "JUBLFOOD",   "fullName": "Jubilant Foodworks Ltd."},
+    "PFOCUS":     {"name": "PI Focus",       "industry": "IT",         "yf": "PFOCUS.NS",     "av": "PFOCUS",     "fullName": "Photon Infotech Focus",   "tv": "NSE:PFOCUS"},
+    "HDFCBANK":   {"name": "HDFC Bank",      "industry": "Banking",    "yf": "HDFCBANK.NS",   "av": "HDFCBANK",   "fullName": "HDFC Bank Ltd.",          "tv": "NSE:HDFCBANK"},
+    "ITC":        {"name": "ITC Ltd.",        "industry": "FMCG",       "yf": "ITC.NS",        "av": "ITC",        "fullName": "ITC Limited",             "tv": "NSE:ITC"},
+    "PNB":        {"name": "PNB",            "industry": "Banking",    "yf": "PNB.NS",        "av": "PNB",        "fullName": "Punjab National Bank",    "tv": "NSE:PNB"},
+    "PAYTM":      {"name": "Paytm",          "industry": "Fintech",    "yf": "PAYTM.NS",      "av": "PAYTM",      "fullName": "One97 Communications",    "tv": "NSE:PAYTM"},
+    "TATAMOTORS": {"name": "Tata Motors",    "industry": "Automobile", "yf": "TATAMOTORS.NS", "av": "TATAMOTORS", "fullName": "Tata Motors Ltd.",        "tv": "NSE:TATAMOTORS"},
+    "HAL":        {"name": "HAL",            "industry": "Defence",    "yf": "HAL.NS",        "av": "HAL",        "fullName": "Hindustan Aeronautics",   "tv": "NSE:HAL"},
+    "JUBLFOOD":   {"name": "Jubilant Foods", "industry": "Retail/QSR", "yf": "JUBLFOOD.NS",   "av": "JUBLFOOD",   "fullName": "Jubilant Foodworks Ltd.", "tv": "NSE:JUBLFOOD"},
 }
 
 TIMEFRAMES = {
-    "1D": {"label": "1 Day",      "yf_period": "1d",  "yf_interval": "5m",  "av_func": "TIME_SERIES_INTRADAY", "av_interval": "60min"},
-    "1W": {"label": "1 Week",     "yf_period": "5d",  "yf_interval": "1h",  "av_func": "TIME_SERIES_DAILY",    "av_interval": ""},
-    "1M": {"label": "1 Month",    "yf_period": "1mo", "yf_interval": "1d",  "av_func": "TIME_SERIES_DAILY",    "av_interval": ""},
-    "6M": {"label": "6 Months",   "yf_period": "6mo", "yf_interval": "1wk", "av_func": "TIME_SERIES_WEEKLY",   "av_interval": ""},
-    "9M": {"label": "6-9 Months", "yf_period": "9mo", "yf_interval": "1wk", "av_func": "TIME_SERIES_WEEKLY",   "av_interval": ""},
+    "1D": {"label": "1 Day",      "yf_period": "1d",  "yf_interval": "5m",  "av_func": "TIME_SERIES_INTRADAY", "av_interval": "60min", "tv_interval": "5"},
+    "1W": {"label": "1 Week",     "yf_period": "5d",  "yf_interval": "1h",  "av_func": "TIME_SERIES_DAILY",    "av_interval": "",       "tv_interval": "60"},
+    "1M": {"label": "1 Month",    "yf_period": "1mo", "yf_interval": "1d",  "av_func": "TIME_SERIES_DAILY",    "av_interval": "",       "tv_interval": "D"},
+    "6M": {"label": "6 Months",   "yf_period": "6mo", "yf_interval": "1wk", "av_func": "TIME_SERIES_WEEKLY",   "av_interval": "",       "tv_interval": "W"},
+    "9M": {"label": "6-9 Months", "yf_period": "9mo", "yf_interval": "1wk", "av_func": "TIME_SERIES_WEEKLY",   "av_interval": "",       "tv_interval": "W"},
 }
 
 SIGNAL_CONFIG = {
@@ -172,14 +178,15 @@ SIGNAL_CONFIG = {
     "WAIT":        {"color": "#856404", "bg": "#fff3cd", "border": "#ffc107", "icon": "◌"},
 }
 
-# ── Session state for signal history & chart toggles ──────────
-if "signal_history" not in st.session_state:
-    st.session_state.signal_history = {}  # {ticker: [list of signal dicts]}
-
-if "chart_show_ema50"   not in st.session_state: st.session_state.chart_show_ema50   = True
-if "chart_show_ema200"  not in st.session_state: st.session_state.chart_show_ema200  = True
-if "chart_show_bb"      not in st.session_state: st.session_state.chart_show_bb      = True
-if "chart_show_volume"  not in st.session_state: st.session_state.chart_show_volume  = True
+# ── Session state ─────────────────────────────────────────────
+for key, default in [
+    ("signal_history", {}),
+    ("chart_show_ema50", True),
+    ("chart_show_ema200", True),
+    ("chart_show_bb", True),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 # ── Helpers ───────────────────────────────────────────────────
 def fmt_inr(val):
@@ -201,10 +208,6 @@ def clean_list(lst):
         except (TypeError, ValueError):
             pass
     return result
-
-def pct_color(val):
-    if val is None: return "#6c757d"
-    return "#1a7340" if float(val) >= 0 else "#721c24"
 
 # ── Technical Indicators ──────────────────────────────────────
 def calc_rsi(closes, period=14):
@@ -232,7 +235,6 @@ def calc_ema(closes, period):
     return ema
 
 def calc_ema_series(closes, period):
-    """Returns full EMA series for chart plotting"""
     if len(closes) < period:
         return [None] * len(closes)
     k = 2 / (period + 1)
@@ -245,13 +247,12 @@ def calc_ema_series(closes, period):
     return result
 
 def calc_bb_series(closes, period=20):
-    """Returns Bollinger Band upper/mid/lower series for chart"""
     upper_s, mid_s, lower_s = [], [], []
     for i in range(len(closes)):
         if i < period - 1:
             upper_s.append(None); mid_s.append(None); lower_s.append(None)
         else:
-            sl = closes[i - period + 1 : i + 1]
+            sl  = closes[i - period + 1: i + 1]
             mid = sum(sl) / period
             std = math.sqrt(sum((v - mid)**2 for v in sl) / period)
             upper_s.append(mid + 2 * std)
@@ -273,16 +274,14 @@ def calc_macd(closes):
 def calc_bollinger(closes, period=20):
     if len(closes) < period:
         return {"upper": None, "mid": None, "lower": None, "pct": None, "position": "N/A"}
-    sl = closes[-period:]
+    sl  = closes[-period:]
     mid = sum(sl) / period
     std = math.sqrt(sum((v - mid)**2 for v in sl) / period)
     upper = mid + 2 * std
     lower = mid - 2 * std
-    last = closes[-1]
-    bpct = ((last - lower) / (upper - lower) * 100) if (upper - lower) > 0 else 50
-    if bpct > 80:   position = "Near Upper (Overbought)"
-    elif bpct < 20: position = "Near Lower (Oversold)"
-    else:           position = "Mid Range"
+    last  = closes[-1]
+    bpct  = ((last - lower) / (upper - lower) * 100) if (upper - lower) > 0 else 50
+    position = "Near Upper (Overbought)" if bpct > 80 else "Near Lower (Oversold)" if bpct < 20 else "Mid Range"
     return {"upper": upper, "mid": mid, "lower": lower, "pct": bpct, "position": position}
 
 def calc_atr(highs, lows, closes, period=14):
@@ -303,7 +302,7 @@ def calc_stochastic(highs, lows, closes, k_period=14):
 
 def detect_trend(closes):
     if len(closes) < 10: return "Insufficient data"
-    mid = len(closes) // 2
+    mid   = len(closes) // 2
     slope = ((closes[-1] - closes[mid]) / closes[mid]) * 100
     if abs(slope) < 1.5:  return "Sideways (Range-bound)"
     if slope > 5:         return "Strong Uptrend"
@@ -322,7 +321,7 @@ def detect_candlestick(opens, highs, lows, closes):
     if upper_wick > body * 2 and lower_wick < body * 0.3: return "Shooting Star (Bearish reversal)"
     if closes[-1] > closes[-2] > closes[-3] and closes[-1] > opens[-1]: return "Three White Soldiers (Strong Bullish)"
     if closes[-1] < closes[-2] < closes[-3] and closes[-1] < opens[-1]: return "Three Black Crows (Strong Bearish)"
-    if body < rng * 0.1: return "Doji (Indecision / Sideways)"
+    if body < rng * 0.1: return "Doji (Indecision)"
     if closes[-1] > closes[-2] and closes[-1] > opens[-1]: return "Bullish Engulfing"
     if closes[-1] < closes[-2] and closes[-1] < opens[-1]: return "Bearish Engulfing"
     return "No clear pattern"
@@ -343,42 +342,42 @@ def compute_all(price_data):
     v = price_data["volumes"]
     sk, sd = calc_stochastic(h, l, c)
     return {
-        "rsi":          calc_rsi(c),
-        "macd":         calc_macd(c),
-        "bollinger":    calc_bollinger(c),
-        "ema50":        calc_ema(c, min(50,  len(c))),
-        "ema200":       calc_ema(c, min(200, len(c))),
-        "ema9":         calc_ema(c, min(9,   len(c))),
-        "ema21":        calc_ema(c, min(21,  len(c))),
-        "ema50_series": calc_ema_series(c, min(50,  len(c))),
-        "ema200_series":calc_ema_series(c, min(200, len(c))),
-        "bb_series":    calc_bb_series(c),
-        "atr":          calc_atr(h, l, c),
-        "stoch_k":      sk,
-        "stoch_d":      sd,
-        "period_return":((c[-1]-c[0])/c[0]*100) if len(c) >= 2 else None,
-        "trend":        detect_trend(c),
-        "pattern":      detect_candlestick(o, h, l, c),
-        "volume_trend": calc_volume_trend(v),
-        "candles":      len(c),
+        "rsi":           calc_rsi(c),
+        "macd":          calc_macd(c),
+        "bollinger":     calc_bollinger(c),
+        "ema50":         calc_ema(c, min(50,  len(c))),
+        "ema200":        calc_ema(c, min(200, len(c))),
+        "ema9":          calc_ema(c, min(9,   len(c))),
+        "ema21":         calc_ema(c, min(21,  len(c))),
+        "ema50_series":  calc_ema_series(c, min(50,  len(c))),
+        "ema200_series": calc_ema_series(c, min(200, len(c))),
+        "bb_series":     calc_bb_series(c),
+        "atr":           calc_atr(h, l, c),
+        "stoch_k":       sk,
+        "stoch_d":       sd,
+        "period_return": ((c[-1]-c[0])/c[0]*100) if len(c) >= 2 else None,
+        "trend":         detect_trend(c),
+        "pattern":       detect_candlestick(o, h, l, c),
+        "volume_trend":  calc_volume_trend(v),
+        "candles":       len(c),
     }
 
 # ── Signal Engine ─────────────────────────────────────────────
 def generate_signal(closes, highs, lows, volumes, ind):
-    rsi    = ind["rsi"];   macd  = ind["macd"]
-    boll   = ind["bollinger"]; ema50 = ind["ema50"]
-    ema200 = ind["ema200"];    atr   = ind["atr"]
-    trend  = ind["trend"];     stoch_k = ind["stoch_k"]
-    curr   = closes[-1]
+    rsi     = ind["rsi"];  macd    = ind["macd"]
+    boll    = ind["bollinger"]; ema50   = ind["ema50"]
+    ema200  = ind["ema200"];    atr     = ind["atr"]
+    trend   = ind["trend"];     stoch_k = ind["stoch_k"]
+    curr    = closes[-1]
     score = 0; max_score = 0; votes = []
 
     max_score += 2
     if rsi is not None:
-        if rsi < 30:    score += 2; votes.append(f"RSI {rsi:.1f} — Oversold (Strong Bullish)")
-        elif rsi < 45:  score += 1; votes.append(f"RSI {rsi:.1f} — Mildly Oversold (Bullish)")
-        elif rsi > 70:  score -= 2; votes.append(f"RSI {rsi:.1f} — Overbought (Strong Bearish)")
-        elif rsi > 55:  score -= 1; votes.append(f"RSI {rsi:.1f} — Mildly Overbought (Bearish)")
-        else:           votes.append(f"RSI {rsi:.1f} — Neutral")
+        if rsi < 30:   score += 2; votes.append(f"RSI {rsi:.1f} — Oversold (Strong Bullish)")
+        elif rsi < 45: score += 1; votes.append(f"RSI {rsi:.1f} — Mildly Oversold (Bullish)")
+        elif rsi > 70: score -= 2; votes.append(f"RSI {rsi:.1f} — Overbought (Strong Bearish)")
+        elif rsi > 55: score -= 1; votes.append(f"RSI {rsi:.1f} — Mildly Overbought (Bearish)")
+        else:          votes.append(f"RSI {rsi:.1f} — Neutral")
 
     max_score += 2
     if macd["hist"] is not None:
@@ -412,8 +411,8 @@ def generate_signal(closes, highs, lows, volumes, ind):
         else:                  votes.append(f"Bollinger %B={boll['pct']:.1f}% — Mid range (Neutral)")
 
     max_score += 2
-    if "Strong Uptrend" in trend:   score += 2; votes.append("Strong Uptrend confirmed")
-    elif "Mild Uptrend" in trend:   score += 1; votes.append("Mild Uptrend")
+    if "Strong Uptrend"   in trend: score += 2; votes.append("Strong Uptrend confirmed")
+    elif "Mild Uptrend"   in trend: score += 1; votes.append("Mild Uptrend")
     elif "Strong Downtrend" in trend: score -= 2; votes.append("Strong Downtrend confirmed")
     elif "Mild Downtrend" in trend: score -= 1; votes.append("Mild Downtrend")
     else:                           votes.append("Sideways / Range-bound market")
@@ -437,19 +436,19 @@ def generate_signal(closes, highs, lows, volumes, ind):
     elif abs(pct_bull) < 15: signal = "WAIT"
     else:                    signal = "HOLD"
 
-    if "Sideways" in trend or signal in ("HOLD", "WAIT"): regime = "Sideways/Ranging"
-    elif signal in ("STRONG BUY", "BUY"):   regime = "Trending Bullish" if "Strong" in trend else "Mild Bullish"
-    elif signal in ("SHORT SELL", "SELL"):  regime = "Trending Bearish" if "Strong" in trend else "Mild Bearish"
-    else: regime = "Mixed/Volatile"
+    regime = ("Sideways/Ranging" if "Sideways" in trend or signal in ("HOLD","WAIT")
+              else ("Trending Bullish" if "Strong" in trend else "Mild Bullish") if signal in ("STRONG BUY","BUY")
+              else ("Trending Bearish" if "Strong" in trend else "Mild Bearish") if signal in ("SHORT SELL","SELL")
+              else "Mixed/Volatile")
 
     if atr is None: atr = curr * 0.015
-    atr_target = {"STRONG BUY": 3.0, "BUY": 2.0, "SHORT SELL": 3.0, "SELL": 2.0, "HOLD": 1.5, "WAIT": 1.0}
-    atr_sl     = {"STRONG BUY": 1.5, "BUY": 1.2, "SHORT SELL": 1.5, "SELL": 1.2, "HOLD": 1.0, "WAIT": 0.8}
+    atr_t = {"STRONG BUY": 3.0, "BUY": 2.0, "SHORT SELL": 3.0, "SELL": 2.0, "HOLD": 1.5, "WAIT": 1.0}
+    atr_s = {"STRONG BUY": 1.5, "BUY": 1.2, "SHORT SELL": 1.5, "SELL": 1.2, "HOLD": 1.0, "WAIT": 0.8}
 
-    is_short = signal in ("SHORT SELL", "SELL")
+    is_short     = signal in ("SHORT SELL", "SELL")
     buy_price    = curr
-    target_price = curr - atr * atr_target.get(signal, 2.0) if is_short else curr + atr * atr_target.get(signal, 2.0)
-    stop_loss    = curr + atr * atr_sl.get(signal, 1.2)     if is_short else curr - atr * atr_sl.get(signal, 1.2)
+    target_price = curr - atr * atr_t.get(signal, 2.0) if is_short else curr + atr * atr_t.get(signal, 2.0)
+    stop_loss    = curr + atr * atr_s.get(signal, 1.2) if is_short else curr - atr * atr_s.get(signal, 1.2)
 
     profit_potential = abs((target_price - buy_price) / buy_price * 100)
     risk_amt         = abs(buy_price - stop_loss)
@@ -473,37 +472,74 @@ def generate_signal(closes, highs, lows, volumes, ind):
         "hold_duration": duration_map.get(signal, "—"), "atr": round(atr, 2),
     }
 
+# ── Signal Reasoning (2-line plain English summary) ──────────
+def build_signal_reasoning(sig, ind, price_data):
+    signal   = sig["signal"]
+    rsi      = ind["rsi"]
+    macd     = ind["macd"]
+    ema50    = ind["ema50"]
+    ema200   = ind["ema200"]
+    trend    = ind["trend"]
+    boll     = ind["bollinger"]
+    curr     = price_data["current_price"]
+    votes    = sig["votes"]
+
+    # Build 2-line reasoning
+    bullish_reasons  = [v for v in votes if "Bullish" in v or "Uptrend" in v or "confirm" in v and "bearish" not in v.lower()]
+    bearish_reasons  = [v for v in votes if "Bearish" in v or "Downtrend" in v]
+
+    if signal in ("STRONG BUY", "BUY"):
+        top = bullish_reasons[:2] if bullish_reasons else votes[:2]
+        line1 = f"Signal driven by: {top[0].split('(')[0].strip()}" if top else "Multiple bullish indicators aligned."
+        line2 = f"Also supported by: {top[1].split('(')[0].strip()}." if len(top) > 1 else f"Trend: {trend}."
+    elif signal in ("SHORT SELL", "SELL"):
+        top   = bearish_reasons[:2] if bearish_reasons else votes[:2]
+        line1 = f"Signal driven by: {top[0].split('(')[0].strip()}" if top else "Multiple bearish indicators aligned."
+        line2 = f"Also: {top[1].split('(')[0].strip()}." if len(top) > 1 else f"Trend: {trend}."
+    elif signal == "HOLD":
+        line1 = "Mixed signals — neither clearly bullish nor bearish."
+        line2 = f"Price is ranging. RSI at {rsi:.0f} — neutral zone." if rsi else "Waiting for a clearer trend to emerge."
+    else:
+        line1 = "Insufficient directional conviction across indicators."
+        line2 = "Consider waiting for RSI breakout or a MACD crossover before entering."
+
+    return line1, line2
+
+# ── News Reference Link ───────────────────────────────────────
+def get_news_link(ticker_symbol, full_name):
+    encoded = full_name.replace(" ", "+")
+    google_news = f"https://news.google.com/search?q={encoded}+NSE+stock&hl=en-IN&gl=IN"
+    moneycontrol = f"https://www.moneycontrol.com/stocks/cptmarket/compsearchnew.php?search_data={ticker_symbol}&cid=&mbsearch_str=&type_search=News&news_op=&tagnews=y&sel_news=MNC"
+    return google_news, moneycontrol
+
 # ── Data Fetching ─────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_via_yfinance(yf_ticker, period, interval):
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_ticker}?range={period}&interval={interval}"
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
-        r = requests.get(url, headers=headers, timeout=10)
+        url     = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_ticker}?range={period}&interval={interval}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r       = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             data   = r.json()
             result = data.get("chart", {}).get("result", [None])[0]
             if result:
-                meta = result.get("meta", {})
-                q    = result.get("indicators", {}).get("quote", [{}])[0]
+                meta       = result.get("meta", {})
+                q          = result.get("indicators", {}).get("quote", [{}])[0]
                 timestamps = result.get("timestamp", [])
                 opens   = clean_list(q.get("open",   []))
                 highs   = clean_list(q.get("high",   []))
                 lows    = clean_list(q.get("low",    []))
                 closes  = clean_list(q.get("close",  []))
                 volumes = clean_list(q.get("volume", []))
-                # Convert timestamps to datetime strings for chart
-                dates = []
+                dates   = []
                 for ts in timestamps:
-                    try:
-                        dates.append(datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M"))
-                    except:
-                        dates.append("")
+                    try:    dates.append(datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M"))
+                    except: dates.append("")
                 if len(closes) >= 5:
                     curr = meta.get("regularMarketPrice") or closes[-1]
-                    prev = meta.get("previousClose") or meta.get("chartPreviousClose") or closes[-2]
+                    prev = meta.get("previousClose") or closes[-2]
                     return {
-                        "source": "Yahoo Finance (direct)",
+                        "source": "Yahoo Finance",
                         "current_price": curr, "prev_close": prev,
                         "open":   meta.get("regularMarketOpen",    opens[-1]  if opens   else curr),
                         "high":   meta.get("regularMarketDayHigh", highs[-1]  if highs   else curr),
@@ -517,22 +553,21 @@ def fetch_via_yfinance(yf_ticker, period, interval):
                         "dates": dates if len(dates) == len(closes) else list(range(len(closes))),
                         "pe_ratio": None, "eps": None, "market_cap": None,
                         "revenue_growth": None, "debt_equity": None, "roe": None,
-                        "dividend_yield": None, "52w_high": meta.get("fiftyTwoWeekHigh"),
-                        "52w_low": meta.get("fiftyTwoWeekLow"), "sector": None,
+                        "dividend_yield": None,
+                        "52w_high": meta.get("fiftyTwoWeekHigh"),
+                        "52w_low":  meta.get("fiftyTwoWeekLow"),
+                        "sector": None,
                     }
     except Exception as e:
         st.warning(f"Direct Yahoo error: {e}")
 
-    if not YF_AVAILABLE:
-        return None
+    if not YF_AVAILABLE: return None
     try:
-        import yfinance as yf
-        ticker = yf.Ticker(yf_ticker)
-        hist   = ticker.history(period=period, interval=interval, auto_adjust=True)
-        if hist.empty or len(hist) < 5:
-            return None
+        t    = yf.Ticker(yf_ticker)
+        hist = t.history(period=period, interval=interval, auto_adjust=True)
+        if hist.empty or len(hist) < 5: return None
         info = {}
-        try: info = ticker.info
+        try: info = t.info
         except: pass
         opens   = clean_list(hist["Open"].tolist())
         highs   = clean_list(hist["High"].tolist())
@@ -540,9 +575,17 @@ def fetch_via_yfinance(yf_ticker, period, interval):
         closes  = clean_list(hist["Close"].tolist())
         volumes = clean_list(hist["Volume"].tolist())
         dates   = [str(d)[:16] for d in hist.index.tolist()]
-        curr = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
+        curr    = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
+
+        # Fundamentals with multiple fallback keys
+        def get_info(*keys):
+            for k in keys:
+                v = info.get(k)
+                if v is not None: return v
+            return None
+
         return {
-            "source": "Yahoo Finance (yfinance)",
+            "source": "Yahoo Finance",
             "current_price": curr, "prev_close": prev,
             "open": opens[-1] if opens else curr,
             "high": highs[-1] if highs else curr,
@@ -552,18 +595,21 @@ def fetch_via_yfinance(yf_ticker, period, interval):
             "change_pct": ((curr - prev) / prev * 100) if prev else 0,
             "time": datetime.now().strftime("%H:%M"),
             "opens": opens, "highs": highs, "lows": lows,
-            "closes": closes, "volumes": volumes,
-            "dates": dates,
-            "pe_ratio":       info.get("trailingPE"),
-            "eps":            info.get("trailingEps"),
-            "market_cap":     info.get("marketCap"),
-            "revenue_growth": info.get("revenueGrowth"),
-            "debt_equity":    info.get("debtToEquity"),
-            "roe":            info.get("returnOnEquity"),
-            "dividend_yield": info.get("dividendYield"),
-            "52w_high":       info.get("fiftyTwoWeekHigh"),
-            "52w_low":        info.get("fiftyTwoWeekLow"),
-            "sector":         info.get("sector"),
+            "closes": closes, "volumes": volumes, "dates": dates,
+            "pe_ratio":       get_info("trailingPE", "forwardPE"),
+            "eps":            get_info("trailingEps", "forwardEps"),
+            "market_cap":     get_info("marketCap"),
+            "revenue_growth": get_info("revenueGrowth", "earningsGrowth"),
+            "debt_equity":    get_info("debtToEquity"),
+            "roe":            get_info("returnOnEquity", "returnOnAssets"),
+            "dividend_yield": get_info("dividendYield", "trailingAnnualDividendYield"),
+            "52w_high":       get_info("fiftyTwoWeekHigh"),
+            "52w_low":        get_info("fiftyTwoWeekLow"),
+            "sector":         get_info("sector", "industry"),
+            "book_value":     get_info("bookValue"),
+            "price_to_book":  get_info("priceToBook"),
+            "current_ratio":  get_info("currentRatio"),
+            "profit_margins": get_info("profitMargins", "grossMargins"),
         }
     except Exception as e:
         st.warning(f"yfinance error: {e}")
@@ -574,8 +620,7 @@ def fetch_via_alphavantage(av_symbol, av_func, av_interval):
     url = f"https://www.alphavantage.co/query?function={av_func}&symbol={av_symbol}&apikey={AV_KEY}&outputsize=compact"
     if av_interval: url += f"&interval={av_interval}"
     try:
-        r = requests.get(url, timeout=15)
-        r.raise_for_status()
+        r    = requests.get(url, timeout=15); r.raise_for_status()
         data = r.json()
         key  = next((k for k in data if "Time Series" in k), None)
         if not key: return None
@@ -592,11 +637,12 @@ def fetch_via_alphavantage(av_symbol, av_func, av_interval):
             "open": opens[-1], "high": highs[-1], "low": lows[-1], "volume": volumes[-1],
             "change": curr - prev, "change_pct": ((curr-prev)/prev*100) if prev else 0,
             "time": datetime.now().strftime("%H:%M"),
-            "opens": opens, "highs": highs, "lows": lows, "closes": closes, "volumes": volumes,
-            "dates": dates,
+            "opens": opens, "highs": highs, "lows": lows, "closes": closes,
+            "volumes": volumes, "dates": dates,
             "pe_ratio": None, "eps": None, "market_cap": None, "revenue_growth": None,
             "debt_equity": None, "roe": None, "dividend_yield": None,
             "52w_high": None, "52w_low": None, "sector": None,
+            "book_value": None, "price_to_book": None, "current_ratio": None, "profit_margins": None,
         }
     except Exception as e:
         st.warning(f"Alpha Vantage error: {e}")
@@ -619,275 +665,182 @@ def send_telegram(message):
     except:
         return False
 
+# ── Signal History ────────────────────────────────────────────
+def update_signal_history(ticker, rec):
+    if ticker not in st.session_state.signal_history:
+        st.session_state.signal_history[ticker] = []
+    h = st.session_state.signal_history[ticker]
+    if h and h[-1]["time"] == rec["time"]: h[-1] = rec
+    else: h.append(rec)
+    st.session_state.signal_history[ticker] = h[-10:]
+
+def render_signal_history(ticker):
+    history = st.session_state.signal_history.get(ticker, [])
+    if not history:
+        st.caption("No history yet — run Analyse a few times to build it.")
+        return
+    rows_html = ""
+    for i, h in enumerate(reversed(history)):
+        sig = h["signal"]; sc = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
+        badge = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
+        chg_c = "#1a7340" if h.get("change_pct", 0) >= 0 else "#721c24"
+        chg_s = "+" if h.get("change_pct", 0) >= 0 else ""
+        bg    = "background:#f8f9fa" if i % 2 == 0 else ""
+        rows_html += f"""<tr style="{bg}">
+            <td style="padding:6px 10px;font-size:12px">{h['time']}</td>
+            <td style="padding:6px 10px;font-size:12px"><b>{h['tf']}</b></td>
+            <td style="padding:6px 10px;font-size:12px">₹{h['price']:,.2f} <span style="color:{chg_c};font-size:11px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
+            <td style="padding:6px 10px">{badge}</td>
+            <td style="padding:6px 10px;font-size:12px;color:{chg_c}">{h.get('regime','—')}</td>
+            <td style="padding:6px 10px;font-size:12px">₹{h.get('target',0):,.2f}</td>
+            <td style="padding:6px 10px;font-size:12px">₹{h.get('stop',0):,.2f}</td>
+            <td style="padding:6px 10px;font-size:12px">{h.get('prob',0):.0f}%</td>
+        </tr>"""
+    st.markdown(f"""
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#f1f3f5;border-bottom:2px solid #dee2e6">
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Time</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">TF</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Price</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Signal</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Regime</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Target</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Stop</th>
+        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Prob</th>
+      </tr></thead>
+      <tbody>{rows_html}</tbody>
+    </table>""", unsafe_allow_html=True)
+
 # ── UI Helpers ────────────────────────────────────────────────
 def metric_card(label, value, sub=None, value_color="#212529"):
-    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else ""
+    sub_html = f'<div class="mb-card-sub">{sub}</div>' if sub else ""
     st.markdown(f"""
-    <div class="metric-card">
-        <div class="metric-label">{label}</div>
-        <div class="metric-value" style="color:{value_color}">{value}</div>
-        {sub_html}
+    <div class="mb-card">
+      <div class="mb-card-label">{label}</div>
+      <div class="mb-card-value" style="color:{value_color}">{value}</div>
+      {sub_html}
     </div>""", unsafe_allow_html=True)
 
-def indicator_row(label, value, reading="", reading_color="#212529"):
-    reading_html = f'<span style="color:{reading_color};font-weight:500">{reading}</span>' if reading else ""
+def indicator_row(label, value, reading="", reading_color="inherit"):
+    reading_html = f'<span style="color:{reading_color};font-weight:600">{reading}</span>' if reading else ""
     st.markdown(f"""
-    <div class="indicator-row">
-        <span style="color:#6c757d">{label}</span>
-        <span>{value} {reading_html}</span>
+    <div class="ind-row">
+      <span class="ind-label">{label}</span>
+      <span>{value} {reading_html}</span>
     </div>""", unsafe_allow_html=True)
 
-# ── FEATURE A: TradingView-style Multi-panel Chart ────────────
-def render_candlestick_chart(price_data, ind, sig, ticker_name, tf_label):
-    if not PLOTLY_AVAILABLE:
-        st.warning("Plotly not installed. Run: pip install plotly")
-        return
+# ── TradingView Widget Chart ──────────────────────────────────
+def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, show_bb):
+    studies = []
+    if show_ema50:  studies.append('"MAExp@tv-basicstudies"')
+    if show_ema200: studies.append('"MAExp@tv-basicstudies"')
+    if show_bb:     studies.append('"BB@tv-basicstudies"')
+    studies_str = "[" + ",".join(studies) + "]"
 
-    opens   = price_data["opens"]
-    highs   = price_data["highs"]
-    lows    = price_data["lows"]
-    closes  = price_data["closes"]
-    volumes = price_data["volumes"]
-    dates   = price_data.get("dates", list(range(len(closes))))
-    curr    = price_data["current_price"]
-    n       = len(closes)
+    widget_html = f"""
+    <div class="tradingview-widget-container" style="height:520px;width:100%">
+      <div id="tradingview_chart" style="height:100%;width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{tv_symbol}",
+        "interval": "{tv_interval}",
+        "timezone": "Asia/Kolkata",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "withdateranges": true,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": false,
+        "save_image": false,
+        "studies": {studies_str},
+        "container_id": "tradingview_chart",
+        "hide_top_toolbar": false,
+        "hide_legend": false,
+        "show_popup_button": true,
+        "popup_width": "1000",
+        "popup_height": "650"
+      }});
+      </script>
+    </div>"""
+    st.components.v1.html(widget_html, height=530, scrolling=False)
 
-    ema50_s  = ind.get("ema50_series", [None]*n)
-    ema200_s = ind.get("ema200_series", [None]*n)
-    bb_upper, bb_mid, bb_lower = ind.get("bb_series", ([None]*n, [None]*n, [None]*n))
-
-    show_ema50  = st.session_state.chart_show_ema50
-    show_ema200 = st.session_state.chart_show_ema200
-    show_bb     = st.session_state.chart_show_bb
-
-    # RSI series for sub-panel
-    rsi_series = [None]*14
-    for i in range(14, n):
-        rsi_series.append(calc_rsi(closes[:i+1]))
-
-    # MACD histogram series for sub-panel
-    macd_hist_series = [None]*26
-    for i in range(26, n):
-        r = calc_macd(closes[:i+1])
-        macd_hist_series.append(r["hist"])
-
-    BG    = "#131722"
-    GRID  = "#1e222d"
-    TEXT  = "#d1d4dc"
-    UP    = "#26a69a"
-    DOWN  = "#ef5350"
-
-    fig = make_subplots(
-        rows=4, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.012,
-        row_heights=[0.52, 0.16, 0.16, 0.16],
-    )
-
-    # Row 1: Candlesticks
-    fig.add_trace(go.Candlestick(
-        x=dates, open=opens, high=highs, low=lows, close=closes,
-        name="Price",
-        increasing=dict(line=dict(color=UP, width=1), fillcolor=UP),
-        decreasing=dict(line=dict(color=DOWN, width=1), fillcolor=DOWN),
-        showlegend=False, whiskerwidth=0.3,
-    ), row=1, col=1)
-
-    if show_ema50 and any(v is not None for v in ema50_s):
-        fig.add_trace(go.Scatter(
-            x=dates, y=ema50_s, mode="lines", name="EMA 50",
-            line=dict(color="#f9a825", width=1.4), connectgaps=True,
-        ), row=1, col=1)
-
-    if show_ema200 and any(v is not None for v in ema200_s):
-        fig.add_trace(go.Scatter(
-            x=dates, y=ema200_s, mode="lines", name="EMA 200",
-            line=dict(color="#7b1fa2", width=1.4), connectgaps=True,
-        ), row=1, col=1)
-
-    if show_bb and any(v is not None for v in bb_upper):
-        fig.add_trace(go.Scatter(
-            x=dates, y=bb_upper, mode="lines", name="BB Upper",
-            line=dict(color="#2196f3", width=1, dash="dot"),
-            connectgaps=True, showlegend=True,
-        ), row=1, col=1)
-        fig.add_trace(go.Scatter(
-            x=dates, y=bb_mid, mode="lines", name="BB Mid",
-            line=dict(color="#2196f3", width=0.8, dash="dot"),
-            connectgaps=True, showlegend=False, opacity=0.5,
-        ), row=1, col=1)
-        fig.add_trace(go.Scatter(
-            x=dates, y=bb_lower, mode="lines", name="BB Lower",
-            line=dict(color="#2196f3", width=1, dash="dot"),
-            fill="tonexty", fillcolor="rgba(33,150,243,0.04)",
-            connectgaps=True, showlegend=False,
-        ), row=1, col=1)
-
-    sig_colors = {"STRONG BUY": UP, "BUY": UP, "SHORT SELL": DOWN,
-                  "SELL": DOWN, "HOLD": "#2196f3", "WAIT": "#f9a825"}
-    sig_color = sig_colors.get(sig["signal"], "#2196f3")
-
-    for level, color, label in [
-        (sig["target_price"], UP,        f"  TGT \u20b9{sig['target_price']:,.0f}"),
-        (sig["stop_loss"],    DOWN,      f"  SL \u20b9{sig['stop_loss']:,.0f}"),
-        (curr,                sig_color, f"  LTP \u20b9{curr:,.2f}"),
-    ]:
-        fig.add_shape(type="line", x0=0, x1=1, y0=level, y1=level,
-                      xref="paper", yref="y1",
-                      line=dict(color=color, width=1, dash="dash"))
-        fig.add_annotation(x=1, y=level, xref="paper", yref="y1",
-                           text=label, showarrow=False,
-                           font=dict(size=10, color=color),
-                           xanchor="left", bgcolor=BG, borderpad=2)
-
-    # Row 2: Volume
-    vol_colors = [UP if c >= o else DOWN for c, o in zip(closes, opens)]
-    fig.add_trace(go.Bar(
-        x=dates, y=volumes, name="Volume",
-        marker=dict(color=vol_colors, line=dict(width=0)),
-        opacity=0.8, showlegend=False,
-    ), row=2, col=1)
-
-    # Row 3: RSI
-    fig.add_trace(go.Scatter(
-        x=dates, y=rsi_series, mode="lines", name="RSI",
-        line=dict(color="#7e57c2", width=1.2),
-        connectgaps=True, showlegend=False,
-        hovertemplate="RSI: %{y:.1f}<extra></extra>",
-    ), row=3, col=1)
-    for level, lcolor in [(70, "rgba(239,83,80,0.35)"), (50, "rgba(120,123,134,0.3)"), (30, "rgba(38,166,154,0.35)")]:
-        fig.add_shape(type="line", x0=0, x1=1, y0=level, y1=level,
-                      xref="paper", yref="y3",
-                      line=dict(color=lcolor, width=0.8, dash="dot"))
-
-    # Row 4: MACD histogram
-    macd_bar_colors = [UP if (v or 0) >= 0 else DOWN for v in macd_hist_series]
-    fig.add_trace(go.Bar(
-        x=dates, y=macd_hist_series, name="MACD",
-        marker=dict(color=macd_bar_colors, line=dict(width=0)),
-        opacity=0.8, showlegend=False,
-        hovertemplate="MACD: %{y:.4f}<extra></extra>",
-    ), row=4, col=1)
-
-    axis_style = dict(
-        gridcolor=GRID, zerolinecolor=GRID, showgrid=True, zeroline=False,
-        tickfont=dict(size=10, color="#787b86"), tickcolor="#787b86",
-        side="right", showline=False, ticks="outside", ticklen=4,
-    )
-
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor=BG, plot_bgcolor=BG,
-        font=dict(family="'Trebuchet MS', sans-serif", size=11, color=TEXT),
-        xaxis_rangeslider_visible=False,
-        hovermode="x unified",
-        hoverlabel=dict(bgcolor="#1e222d", font_size=11, font_color=TEXT, bordercolor="#434651"),
-        height=680,
-        margin=dict(l=0, r=90, t=36, b=0),
-        legend=dict(
-            orientation="h", x=0, y=1.01, xanchor="left", yanchor="bottom",
-            bgcolor="rgba(0,0,0,0)", font=dict(size=10, color=TEXT),
-        ),
-        title=dict(
-            text=f"<b>{ticker_name}</b>  \u00b7  {tf_label}  \u00b7  "
-                 f"<span style='color:{sig_color}'>{sig['signal']} "
-                 f"{SIGNAL_CONFIG.get(sig['signal'], {}).get('icon', '')}</span>",
-            font=dict(size=13, color=TEXT),
-            x=0.0, xanchor="left",
-        ),
-    )
-
-    price_range = [min(lows) * 0.997, max(highs) * 1.003]
-    fig.update_yaxes(**axis_style, tickprefix="\u20b9", tickformat=",.0f", range=price_range, row=1, col=1)
-    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".2s", row=2, col=1)
-    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".0f", range=[0, 100], row=3, col=1)
-    fig.update_yaxes(**axis_style, tickprefix="", tickformat=".3f", row=4, col=1)
-    fig.update_xaxes(gridcolor=GRID, showgrid=True, tickfont=dict(size=10, color="#787b86"),
-                     showline=False, zeroline=False, tickcolor="#787b86", rangeslider_visible=False)
-    for r in [1, 2, 3]:
-        fig.update_xaxes(showticklabels=False, row=r, col=1)
-
-    st.plotly_chart(fig, use_container_width=True, config={
-        "displayModeBar": True,
-        "modeBarButtonsToRemove": ["lasso2d", "select2d", "autoScale2d"],
-        "displaylogo": False,
-        "scrollZoom": True,
-    })
-
-
-# ── FEATURE A: Visual Metrics — pure HTML/SVG (no Plotly bg issues) ──
-def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return, signal):
-    rsi_color = "#ef5350" if (rsi_val or 50) > 70 else "#26a69a" if (rsi_val or 50) < 30 else "#f9a825"
-    rsi_label = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
-    rsi_display = f"{rsi_val:.1f}" if rsi_val else "—"
-
-    prob_color = "#26a69a" if prob_val >= 65 else "#f9a825" if prob_val >= 45 else "#ef5350"
-    rr_color   = "#26a69a" if rr_ratio >= 2 else "#f9a825" if rr_ratio >= 1 else "#ef5350"
-    pr_color   = "#26a69a" if (period_return or 0) >= 0 else "#ef5350"
+# ── Visual Metrics (theme-aware HTML/SVG) ─────────────────────
+def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
+    rsi_color  = "#dc3545" if (rsi_val or 50) > 70 else "#1a7340" if (rsi_val or 50) < 30 else "#f59e0b"
+    rsi_label  = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
+    rsi_disp   = f"{rsi_val:.1f}" if rsi_val else "—"
+    prob_color = "#1a7340" if prob_val >= 65 else "#f59e0b" if prob_val >= 45 else "#dc3545"
+    rr_color   = "#1a7340" if rr_ratio >= 2 else "#f59e0b" if rr_ratio >= 1 else "#dc3545"
+    pr_color   = "#1a7340" if (period_return or 0) >= 0 else "#dc3545"
     pr_text    = fmt_pct(period_return) if period_return is not None else "—"
 
-    def half_gauge_html(value, max_val, color, label, display_val, sublabel):
-        pct = min(value / max_val, 1.0)
+    def gauge_arc(val, max_val, color, label, disp, sub):
+        pct   = min(val / max_val, 1.0)
         angle = pct * 180 - 180
-        rad = math.radians(angle)
-        nx = 60 + 38 * math.cos(rad)
-        ny = 52 + 38 * math.sin(rad)
-        ex = 60 + 50 * math.cos(math.radians(pct * 180 - 180))
-        ey = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
+        rad   = math.radians(angle)
+        nx    = 60 + 38 * math.cos(rad)
+        ny    = 52 + 38 * math.sin(rad)
+        ex    = 60 + 50 * math.cos(math.radians(pct * 180 - 180))
+        ey    = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
         large = 1 if pct > 0.5 else 0
-        return f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
-            text-align:center;border:1px solid #2a2e39">
-          <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">{label}</div>
-          <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:140px">
-            <path d="M 10 52 A 50 50 0 0 1 110 52" fill="none" stroke="#2a2e39" stroke-width="8" stroke-linecap="round"/>
-            <path d="M 10 52 A 50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}"
-                  stroke-width="8" stroke-linecap="round" opacity="0.9"/>
-            <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="60" cy="52" r="3" fill="{color}"/>
+        return f"""
+        <div class="vm-card">
+          <div class="vm-label">{label}</div>
+          <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:130px">
+            <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="#e9ecef" stroke-width="9" stroke-linecap="round"/>
+            <path d="M10 52 A50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round"/>
+            <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="60" cy="52" r="4" fill="{color}"/>
           </svg>
-          <div style="font-size:20px;font-weight:700;color:{color};margin-top:-4px">{display_val}</div>
-          <div style="font-size:11px;color:#787b86;margin-top:2px">{sublabel}</div>
+          <div class="vm-value" style="color:{color}">{disp}</div>
+          <div class="vm-sub">{sub}</div>
         </div>"""
 
-    rsi_html  = half_gauge_html(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_display, rsi_label)
-    prob_html = half_gauge_html(prob_val, 100, prob_color, "Success Probability", f"{prob_val:.0f}%",
-                                "High" if prob_val >= 65 else "Medium" if prob_val >= 45 else "Low")
+    rsi_html  = gauge_arc(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_disp, rsi_label)
+    prob_html = gauge_arc(prob_val, 100, prob_color, "Success Prob.", f"{prob_val:.0f}%",
+                          "High confidence" if prob_val >= 65 else "Moderate" if prob_val >= 45 else "Low confidence")
 
+    # Donut
     total = 1 + max(rr_ratio, 0.01)
-    circ  = 2 * math.pi * 30
-    risk_dash = (1 / total) * circ
-    rew_dash  = (max(rr_ratio, 0.01) / total) * circ
-    rr_html = f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
-        text-align:center;border:1px solid #2a2e39">
-      <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">Risk : Reward</div>
-      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:80px;margin:4px auto;display:block">
-        <circle cx="40" cy="40" r="30" fill="none" stroke="#ef5350" stroke-width="10"
-                stroke-dasharray="{risk_dash:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
-        <circle cx="40" cy="40" r="30" fill="none" stroke="#26a69a" stroke-width="10"
-                stroke-dasharray="{rew_dash:.1f} {circ:.1f}" stroke-dashoffset="{-risk_dash:.1f}" transform="rotate(-90 40 40)"/>
-        <text x="40" y="37" text-anchor="middle" font-size="9" fill="{rr_color}" font-weight="bold">1:{rr_ratio:.1f}</text>
-        <text x="40" y="49" text-anchor="middle" font-size="7" fill="#787b86">R:R</text>
+    circ  = 2 * math.pi * 28
+    rd    = (1 / total) * circ
+    rwd   = (max(rr_ratio, 0.01) / total) * circ
+    rr_html = f"""
+    <div class="vm-card">
+      <div class="vm-label">Risk : Reward</div>
+      <svg viewBox="0 0 80 76" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:76px;display:block;margin:0 auto">
+        <circle cx="40" cy="40" r="28" fill="none" stroke="#dc3545" stroke-width="9"
+                stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
+        <circle cx="40" cy="40" r="28" fill="none" stroke="#1a7340" stroke-width="9"
+                stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 40 40)"/>
+        <text x="40" y="37" text-anchor="middle" font-size="8.5" fill="{rr_color}" font-weight="700" font-family="sans-serif">1:{rr_ratio:.1f}</text>
+        <text x="40" y="48" text-anchor="middle" font-size="7" fill="#6c757d" font-family="sans-serif">R:R</text>
       </svg>
-      <div style="font-size:11px;color:{rr_color};margin-top:2px">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1-2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
+      <div class="vm-value" style="color:{rr_color};font-size:16px">1 : {rr_ratio:.2f}</div>
+      <div class="vm-sub">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
     </div>"""
 
+    # Sparkline
     spark_svg = ""
     if closes and len(closes) > 1:
         mn, mx = min(closes), max(closes)
-        rng = mx - mn if mx != mn else 1
-        w, h = 200, 44
-        pts = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
-        spark_svg = f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg"
-            style="width:100%;height:48px;display:block">
-          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8"/>
+        rng    = mx - mn if mx != mn else 1
+        w, h   = 180, 40
+        pts    = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
+        spark_svg = f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:42px;display:block">
+          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8" stroke-linejoin="round"/>
         </svg>"""
 
-    spark_html = f"""<div style="background:#1e222d;border-radius:10px;padding:12px 8px 8px;
-        text-align:center;border:1px solid #2a2e39">
-      <div style="font-size:11px;color:#787b86;font-weight:500;letter-spacing:0.04em;margin-bottom:4px">Period Return</div>
-      <div style="padding:2px 8px 0">{spark_svg}</div>
-      <div style="font-size:20px;font-weight:700;color:{pr_color};margin-top:4px">{pr_text}</div>
-      <div style="font-size:11px;color:#787b86;margin-top:2px">{'Positive' if (period_return or 0) >= 0 else 'Negative'} trend</div>
+    spark_html = f"""
+    <div class="vm-card">
+      <div class="vm-label">Period Return</div>
+      <div style="padding:4px 6px 0">{spark_svg}</div>
+      <div class="vm-value" style="color:{pr_color}">{pr_text}</div>
+      <div class="vm-sub">{'Positive' if (period_return or 0) >= 0 else 'Negative'} over period</div>
     </div>"""
 
     c1, c2, c3, c4 = st.columns(4)
@@ -896,106 +849,45 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return, si
     with c3: st.markdown(rr_html,    unsafe_allow_html=True)
     with c4: st.markdown(spark_html, unsafe_allow_html=True)
 
-
-
-# ── FEATURE B: Signal History ─────────────────────────────────
-def update_signal_history(ticker, sig_record):
-    if ticker not in st.session_state.signal_history:
-        st.session_state.signal_history[ticker] = []
-    history = st.session_state.signal_history[ticker]
-    # Avoid duplicate entry for same minute
-    if history and history[-1]["time"] == sig_record["time"]:
-        history[-1] = sig_record  # update in place
-    else:
-        history.append(sig_record)
-    # Keep last 10
-    st.session_state.signal_history[ticker] = history[-10:]
-
-def render_signal_history(ticker):
-    history = st.session_state.signal_history.get(ticker, [])
-    if not history:
-        st.caption("No signal history yet for this session. Run Analyse multiple times to build history.")
-        return
-
-    rows_html = ""
-    for i, h in enumerate(reversed(history)):
-        sig    = h["signal"]
-        sc     = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
-        badge  = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
-        chg_c  = "#26a69a" if h.get("change_pct", 0) >= 0 else "#ef5350"
-        chg_s  = "+" if h.get("change_pct", 0) >= 0 else ""
-        rows_html += f"""
-        <tr style="{'background:#f8f9fa' if i % 2 == 0 else ''}">
-            <td>{h['time']}</td>
-            <td><b>{h['tf']}</b></td>
-            <td>₹{h['price']:,.2f} <span style='color:{chg_c};font-size:11px'>({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
-            <td>{badge}</td>
-            <td style='color:{chg_c}'>{h.get('regime','—')}</td>
-            <td>₹{h.get('target',0):,.2f}</td>
-            <td>₹{h.get('stop',0):,.2f}</td>
-            <td>{h.get('prob',0):.0f}%</td>
-        </tr>"""
-
-    st.markdown(f"""
-    <table class="history-table">
-        <thead>
-            <tr>
-                <th>Time</th><th>Timeframe</th><th>Price</th><th>Signal</th>
-                <th>Regime</th><th>Target</th><th>Stop Loss</th><th>Probability</th>
-            </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-    </table>
-    """, unsafe_allow_html=True)
-
-
-# ── FEATURE C: Indicator Toggle Bar ──────────────────────────
+# ── Chart Toggle Bar ──────────────────────────────────────────
 def render_chart_toggle_bar():
-    st.markdown("**📊 Chart Indicators**")
-    c1, c2, c3, c4, _, _, _ = st.columns([1.2, 1.2, 1.5, 1.2, 1, 1, 1])
-
+    c1, c2, c3, _, _, _, _ = st.columns([1.2, 1.2, 1.8, 1, 1, 1, 1])
     with c1:
-        ema50_label = "🟡 EMA 50 ✓" if st.session_state.chart_show_ema50 else "🟡 EMA 50"
-        if st.button(ema50_label, key="toggle_ema50", use_container_width=True):
-            st.session_state.chart_show_ema50 = not st.session_state.chart_show_ema50
-            st.rerun()
-
+        lbl = "🟡 EMA 50 ✓" if st.session_state.chart_show_ema50 else "🟡 EMA 50"
+        if st.button(lbl, key="t_ema50", use_container_width=True):
+            st.session_state.chart_show_ema50 = not st.session_state.chart_show_ema50; st.rerun()
     with c2:
-        ema200_label = "🟣 EMA 200 ✓" if st.session_state.chart_show_ema200 else "🟣 EMA 200"
-        if st.button(ema200_label, key="toggle_ema200", use_container_width=True):
-            st.session_state.chart_show_ema200 = not st.session_state.chart_show_ema200
-            st.rerun()
-
+        lbl = "🟣 EMA 200 ✓" if st.session_state.chart_show_ema200 else "🟣 EMA 200"
+        if st.button(lbl, key="t_ema200", use_container_width=True):
+            st.session_state.chart_show_ema200 = not st.session_state.chart_show_ema200; st.rerun()
     with c3:
-        bb_label = "🔵 Bollinger Bands ✓" if st.session_state.chart_show_bb else "🔵 Bollinger Bands"
-        if st.button(bb_label, key="toggle_bb", use_container_width=True):
-            st.session_state.chart_show_bb = not st.session_state.chart_show_bb
-            st.rerun()
-
-    with c4:
-        vol_label = "📊 Volume ✓" if st.session_state.chart_show_volume else "📊 Volume"
-        if st.button(vol_label, key="toggle_vol", use_container_width=True):
-            st.session_state.chart_show_volume = not st.session_state.chart_show_volume
-            st.rerun()
-
+        lbl = "🔵 Bollinger Bands ✓" if st.session_state.chart_show_bb else "🔵 Bollinger Bands"
+        if st.button(lbl, key="t_bb", use_container_width=True):
+            st.session_state.chart_show_bb = not st.session_state.chart_show_bb; st.rerun()
 
 # ── Main App ──────────────────────────────────────────────────
 def main():
+    # ── Polished Sidebar ──────────────────────────────────────
     with st.sidebar:
-        st.markdown("## 🐂 MB Stock Intelligence")
-        st.markdown("*Enhanced Edition — Bloomberg-lite*")
+        st.markdown("""
+        <div style="text-align:center;padding:8px 0 4px">
+          <div style="font-size:36px">🐂</div>
+          <div style="font-size:16px;font-weight:700;letter-spacing:0.02em">MB Stock Intelligence</div>
+          <div style="font-size:11px;color:#6c757d;margin-top:2px">Enhanced Edition · NSE India</div>
+        </div>""", unsafe_allow_html=True)
         st.markdown("---")
 
         industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
-        chosen_ind = st.selectbox("🏭 Industry", industries)
+        chosen_ind = st.selectbox(
+            "🏭 Filter by Industry",
+            industries,
+            format_func=lambda x: f"{INDUSTRY_ICONS.get(x, '📌')} {x}"
+        )
 
-        filtered = {
-            k: v for k, v in STOCKS.items()
-            if chosen_ind == "All" or v["industry"] == chosen_ind
-        }
+        filtered      = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
         ticker_options = list(filtered.keys())
-        ticker_labels  = [f"{t} — {filtered[t]['name']}" for t in ticker_options]
-        ticker_idx     = st.selectbox("📊 Stock", range(len(ticker_options)), format_func=lambda i: ticker_labels[i])
+        ticker_labels  = [f"{INDUSTRY_ICONS.get(filtered[t]['industry'],'📌')} {t} — {filtered[t]['name']}" for t in ticker_options]
+        ticker_idx     = st.selectbox("📈 Select Stock", range(len(ticker_options)), format_func=lambda i: ticker_labels[i])
         ticker         = ticker_options[ticker_idx]
 
         tf_key = st.radio(
@@ -1005,55 +897,77 @@ def main():
             index=2,
         )
 
-        analyse = st.button("🔍 Analyse", use_container_width=True, type="primary")
+        st.markdown("<br>", unsafe_allow_html=True)
+        analyse = st.button("🔍  Analyse Now", use_container_width=True, type="primary")
+
+        # Selected stock info card
+        s = STOCKS[ticker]
+        st.markdown(f"""
+        <div class="sb-stock-card">
+          <div style="font-weight:700;font-size:13px">{INDUSTRY_ICONS.get(s['industry'],'📌')} {ticker}</div>
+          <div style="font-size:12px;margin-top:2px">{s['fullName']}</div>
+          <div style="font-size:11px;color:#6c757d;margin-top:4px">
+            Industry: {s['industry']}<br>
+            Timeframe: {TIMEFRAMES[tf_key]['label']}
+          </div>
+        </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
-        st.markdown(f"**Selected:** `{ticker}`")
-        st.markdown(f"**Timeframe:** {TIMEFRAMES[tf_key]['label']}")
-        st.markdown("---")
-        st.markdown("**NSE Hours**")
-        st.markdown("Mon–Fri · 9:15 AM – 3:30 PM IST")
-        st.markdown("---")
-        st.caption("Data: Yahoo Finance + Alpha Vantage")
-        st.caption("Signals: RSI · MACD · EMA · Bollinger · ATR · Stochastic")
+        st.markdown("""
+        <div style="font-size:11px;color:#6c757d;line-height:1.7">
+          <b>🕐 NSE Hours</b><br>
+          Mon–Fri · 9:15 AM – 3:30 PM IST<br><br>
+          <b>📡 Data Sources</b><br>
+          Yahoo Finance · Alpha Vantage<br><br>
+          <b>📊 Indicators Used</b><br>
+          RSI · MACD · EMA 50/200<br>
+          Bollinger Bands · ATR · Stochastic
+        </div>""", unsafe_allow_html=True)
 
-        # Signal history clear button
+        st.markdown("---")
         if st.button("🗑️ Clear Signal History", use_container_width=True):
             st.session_state.signal_history = {}
             st.success("History cleared")
 
     # ── Header ────────────────────────────────────────────────
     st.markdown("""
-<div style="display:flex;align-items:center;gap:16px;margin-bottom:0.5rem">
-    <div style="font-size:52px;line-height:1">🐂</div>
-    <div>
-        <div style="font-size:28px;font-weight:700;line-height:1.1">MB Stock Intelligence</div>
-        <div style="font-size:13px;color:#6c757d">Live NSE prices · Bloomberg-lite charts · Telegram alerts</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:0.5rem">
+      <div style="font-size:44px;line-height:1">🐂</div>
+      <div>
+        <div style="font-size:26px;font-weight:800;line-height:1.1">MB Stock Intelligence</div>
+        <div style="font-size:12px;color:#6c757d">Live NSE · TradingView Charts · Signal Reasoning · Telegram Alerts</div>
+      </div>
+      <div style="margin-left:auto;background:#1a7340;color:white;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">v3 · Enhanced</div>
     </div>
-    <div style="margin-left:auto;background:#1a7340;color:white;padding:4px 14px;
-                border-radius:20px;font-size:12px;font-weight:600">MB Enhanced</div>
-</div>
-<hr style="margin:0.5rem 0 1rem 0">
-""", unsafe_allow_html=True)
+    <hr style="margin:0.4rem 0 1rem">""", unsafe_allow_html=True)
 
     if not analyse:
-        st.info("👈 Select a stock and timeframe from the sidebar, then click **Analyse**")
-        st.markdown("""
-        **What's new in Enhanced Edition:**
-        - 📈 **Bloomberg-lite chart** — Candlesticks + EMA 50/200 + Bollinger Bands + Volume in one Plotly chart
-        - 🎛️ **Show/Hide toggles** — Control which indicators appear on the chart
-        - 🔵 **Gauge charts** — RSI and Success Probability as visual dials
-        - 🍩 **Donut chart** — Risk:Reward ratio visualised
-        - 📉 **Sparkline** — Period return price trace
-        - 🕐 **Signal History** — Last 10 signals per stock tracked automatically
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.markdown("""
+            **How to use:**
+            1. Select an industry from the sidebar filter
+            2. Pick a stock and timeframe
+            3. Click **Analyse Now**
+            4. Review signal, reasoning, chart and metrics
 
-        **How the signals work:**
-        - Fetches real OHLC data from Yahoo Finance (Alpha Vantage as fallback)
-        - Computes RSI, MACD, Bollinger Bands, EMA 50/200, ATR, Stochastic in real time
-        - Signal engine weighs all indicators to generate: **STRONG BUY / BUY / SHORT SELL / SELL / HOLD / WAIT**
-        - Entry price, target and stop loss are calculated from real ATR (volatility)
-        - Telegram alert fires automatically if price reaches target
-        """)
+            **Signals explained:**
+            - **STRONG BUY / BUY** — Majority of indicators align bullish
+            - **SHORT SELL / SELL** — Majority of indicators align bearish
+            - **HOLD** — Mixed signals, maintain position
+            - **WAIT** — No clear direction, stay out
+            """)
+        with col_r:
+            st.markdown("""
+            **What you get:**
+            - 📈 Live TradingView chart with EMA/BB overlays
+            - 🎯 Entry price, Target and Stop Loss (ATR-based)
+            - 💡 2-line signal reasoning in plain English
+            - 🔗 News reference links for the stock
+            - 📊 Visual metrics — RSI gauge, R:R donut, sparkline
+            - 🕐 Session-based signal history table
+            - 📲 Telegram alert when target is hit
+            """)
         return
 
     stock = STOCKS[ticker]
@@ -1063,103 +977,125 @@ def main():
         price_data = fetch_market_data(ticker, tf_key)
 
     if not price_data:
-        st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15 AM–3:30 PM IST) or check your internet connection.")
+        st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
         return
 
-    ind = compute_all(price_data)
-    sig = generate_signal(price_data["closes"], price_data["highs"], price_data["lows"], price_data["volumes"], ind)
+    ind    = compute_all(price_data)
+    sig    = generate_signal(price_data["closes"], price_data["highs"],
+                             price_data["lows"], price_data["volumes"], ind)
+    curr   = price_data["current_price"]
+    chg_up = price_data["change"] >= 0
+    signal = sig["signal"]
+    sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
+    macd   = ind["macd"]
+    boll   = ind["bollinger"]
+    rsi    = ind["rsi"]
+    ema50  = ind["ema50"]
+    ema200 = ind["ema200"]
 
-    curr    = price_data["current_price"]
-    chg_up  = price_data["change"] >= 0
-    signal  = sig["signal"]
-    sc      = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
-    macd    = ind["macd"]
-    boll    = ind["bollinger"]
-    rsi     = ind["rsi"]
-    ema50   = ind["ema50"]
-    ema200  = ind["ema200"]
-
-    # ── Save to signal history ────────────────────────────────
-    now_str = datetime.now().strftime("%H:%M:%S")
+    # Save history
     update_signal_history(ticker, {
-        "time":       now_str,
-        "tf":         tf["label"],
-        "price":      curr,
-        "change_pct": price_data["change_pct"],
-        "signal":     signal,
-        "regime":     sig["regime"],
-        "target":     sig["target_price"],
-        "stop":       sig["stop_loss"],
-        "prob":       sig["success_prob"],
+        "time": datetime.now().strftime("%H:%M:%S"), "tf": tf["label"],
+        "price": curr, "change_pct": price_data["change_pct"],
+        "signal": signal, "regime": sig["regime"],
+        "target": sig["target_price"], "stop": sig["stop_loss"],
+        "prob": sig["success_prob"],
     })
 
     # ── Live price strip ──────────────────────────────────────
     chg_color = "#1a7340" if chg_up else "#721c24"
     chg_sym   = "▲" if chg_up else "▼"
     st.markdown(f"""
-    <div style="background:#f8f9fa;border-radius:12px;padding:16px 24px;margin-bottom:1rem;
-                border:1px solid #e9ecef;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-        <div>
-            <div style="font-size:13px;color:#6c757d;font-weight:500;text-transform:uppercase;letter-spacing:0.05em">{stock['fullName']} · NSE · {tf['label']}</div>
-            <div style="font-size:32px;font-weight:700;margin-top:2px">₹{curr:,.2f}
-                <span style="font-size:16px;color:{chg_color};margin-left:8px">{chg_sym} {abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
-            </div>
+    <div style="border-radius:12px;padding:14px 22px;margin-bottom:1rem;
+                border:1px solid {'#c3e6cb' if chg_up else '#f5c6cb'};
+                background:{'#f0fff4' if chg_up else '#fff5f5'};
+                display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
+          {INDUSTRY_ICONS.get(stock['industry'],'📌')} {stock['fullName']} · NSE · {tf['label']}
         </div>
-        <div style="font-size:12px;color:#6c757d;text-align:right">
-            <div>{price_data['time']} IST · {price_data['source']}</div>
-            <div>Prev close: ₹{price_data['prev_close']:,.2f} · {ind['candles']} candles</div>
+        <div style="font-size:30px;font-weight:800;margin-top:2px">₹{curr:,.2f}
+          <span style="font-size:15px;color:{chg_color};margin-left:8px">{chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+      </div>
+      <div style="font-size:11px;color:#6c757d;text-align:right">
+        <div>{price_data['time']} IST · {price_data['source']}</div>
+        <div>Prev close ₹{price_data['prev_close']:,.2f} · {ind['candles']} candles</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
 
-    # OHLV row
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1: metric_card("Open",    fmt_inr(price_data["open"]))
-    with c2: metric_card("High",    fmt_inr(price_data["high"]), value_color="#1a7340")
-    with c3: metric_card("Low",     fmt_inr(price_data["low"]),  value_color="#721c24")
-    with c4: metric_card("Volume",  f"{price_data['volume']/1e5:.1f}L")
-    with c5: metric_card("52W High",fmt_inr(price_data.get("52w_high")), value_color="#1a7340")
-    with c6: metric_card("52W Low", fmt_inr(price_data.get("52w_low")),  value_color="#721c24")
+    # OHLCV
+    c1,c2,c3,c4,c5,c6 = st.columns(6)
+    with c1: metric_card("Open",     fmt_inr(price_data["open"]))
+    with c2: metric_card("High",     fmt_inr(price_data["high"]),          value_color="#1a7340")
+    with c3: metric_card("Low",      fmt_inr(price_data["low"]),           value_color="#721c24")
+    with c4: metric_card("Volume",   f"{price_data['volume']/1e5:.1f}L")
+    with c5: metric_card("52W High", fmt_inr(price_data.get("52w_high")), value_color="#1a7340")
+    with c6: metric_card("52W Low",  fmt_inr(price_data.get("52w_low")),  value_color="#721c24")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Signal box ────────────────────────────────────────────
-    confluence = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
-    votes_html = "".join(f'<div class="vote-item">• {v}</div>' for v in sig["votes"])
+    # ── Signal Box + Reasoning ────────────────────────────────
+    confluence  = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
+    votes_html  = "".join(f'<div class="vote-item" style="color:#495057">• {v}</div>' for v in sig["votes"])
+    line1, line2 = build_signal_reasoning(sig, ind, price_data)
+    google_link, mc_link = get_news_link(ticker, stock["fullName"])
+
     st.markdown(f"""
     <div class="signal-box" style="background:{sc['bg']};border:2px solid {sc['border']}">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-            <div>
-                <div style="font-size:12px;color:{sc['color']};font-weight:500;text-transform:uppercase;letter-spacing:0.05em">AI Signal · {tf['label']} · {sig['regime']}</div>
-                <div style="font-size:28px;font-weight:700;color:{sc['color']};margin-top:4px">{sc['icon']} {signal}</div>
-                <div style="font-size:13px;color:{sc['color']};margin-top:4px">{confluence}</div>
-            </div>
-            <div style="max-width:420px">{votes_html}</div>
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:11px;color:{sc['color']};font-weight:700;text-transform:uppercase;letter-spacing:0.06em">
+            Signal · {tf['label']} · {sig['regime']}
+          </div>
+          <div style="font-size:26px;font-weight:800;color:{sc['color']};margin-top:4px">{sc['icon']} {signal}</div>
+          <div style="font-size:12px;color:{sc['color']};margin-top:2px">{confluence}</div>
         </div>
+        <div style="max-width:400px">{votes_html}</div>
+      </div>
     </div>
-    """, unsafe_allow_html=True)
+    <div class="reasoning-box">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6c757d;letter-spacing:0.05em;margin-bottom:6px">
+        💡 Signal Reasoning
+      </div>
+      <div>📌 {line1}</div>
+      <div style="margin-top:4px">📌 {line2}</div>
+      <div style="margin-top:8px;font-size:12px;color:#6c757d">
+        🔗 News: <a href="{google_link}" target="_blank" style="color:#004085;text-decoration:none">Google News</a>
+        &nbsp;·&nbsp;
+        <a href="{mc_link}" target="_blank" style="color:#004085;text-decoration:none">MoneyControl</a>
+        &nbsp;·&nbsp;
+        <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:#004085;text-decoration:none">Economic Times</a>
+      </div>
+    </div>""", unsafe_allow_html=True)
 
-    # ── Trade levels ──────────────────────────────────────────
-    st.markdown("### Trade Levels")
+    # ── Trade Levels ──────────────────────────────────────────
+    st.markdown("### 🎯 Trade Levels")
     c1, c2, c3, c4 = st.columns(4)
     with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color="#004085")
     with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color="#1a7340")
     with c3: metric_card("Stop Loss",     fmt_inr(sig["stop_loss"]),    value_color="#721c24")
-    with c4: metric_card("Risk : Reward", f"1 : {sig['rr_ratio']:.2f}")
+    with c4: metric_card("Hold Duration", sig["hold_duration"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── FEATURE A: Visual Metrics row ────────────────────────
+    # ── Visual Metrics ────────────────────────────────────────
     st.markdown("### 📊 Visual Metrics")
     render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
-                          price_data["closes"], ind["period_return"], signal)
+                          price_data["closes"], ind["period_return"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── FEATURE A+C: Bloomberg-lite Chart with toggles ────────
-    st.markdown("### 📈 Bloomberg-lite Chart")
+    # ── TradingView Chart ─────────────────────────────────────
+    st.markdown("### 📈 Live Chart")
+    st.caption("Powered by TradingView · Use the toolbar to zoom, draw or add indicators")
     render_chart_toggle_bar()
-    render_candlestick_chart(price_data, ind, sig, stock["fullName"], tf["label"])
+    render_tradingview_chart(
+        stock["tv"], tf["tv_interval"],
+        st.session_state.chart_show_ema50,
+        st.session_state.chart_show_ema200,
+        st.session_state.chart_show_bb,
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1167,41 +1103,33 @@ def main():
     col_ind, col_fund = st.columns(2)
 
     with col_ind:
-        st.markdown("#### Technical Indicators")
-        rsi_val  = f"{rsi:.2f}"          if rsi              else "—"
-        macd_val = f"{macd['hist']:.4f}" if macd["hist"]     else "—"
-        boll_val = f"{boll['pct']:.1f}%" if boll["pct"]      else "—"
+        st.markdown("#### 📐 Technical Indicators")
+        rsi_val  = f"{rsi:.2f}"           if rsi             else "—"
+        macd_val = f"{macd['hist']:.4f}"  if macd["hist"]    else "—"
+        boll_val = f"{boll['pct']:.1f}%"  if boll["pct"]     else "—"
         sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"] else "—"
+        pr       = ind["period_return"]
 
         rsi_read  = ("Overbought", "#721c24") if rsi and rsi > 70 else ("Oversold", "#1a7340") if rsi and rsi < 30 else ("Neutral", "#495057")
-        macd_read = ("Bullish", "#1a7340") if macd["hist"] and macd["hist"] > 0 else ("Bearish", "#721c24")
-        if ema50 and ema200:
-            ema_read = ("Golden Cross ▲", "#1a7340") if ema50 > ema200 else ("Death Cross ▼", "#721c24")
-        else:
-            ema_read = ("N/A", "#6c757d")
+        macd_read = ("Bullish ▲", "#1a7340") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "#721c24")
+        ema_read  = ("Golden Cross ▲", "#1a7340") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "#721c24") if ema50 and ema200 else ("N/A", "#6c757d")
+        sk_read   = ("Overbought", "#721c24") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "#1a7340") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "#495057")
 
-        sk_read = ("Overbought", "#721c24") if ind["stoch_k"] and ind["stoch_k"] > 80 \
-             else ("Oversold", "#1a7340")   if ind["stoch_k"] and ind["stoch_k"] < 20 \
-             else ("Neutral", "#495057")
-
-        indicator_row("RSI (14)",        rsi_val,  *rsi_read)
-        indicator_row("MACD Histogram",  macd_val, *macd_read)
-        indicator_row("Bollinger %B",    boll_val, boll["position"])
-        indicator_row("EMA 50",          fmt_inr(ema50),  f"Price {'above' if ema50 and curr > ema50 else 'below'} EMA50" if ema50 else "—")
-        indicator_row("EMA 200",         fmt_inr(ema200), *ema_read)
-        indicator_row("ATR (14)",        fmt_inr(ind["atr"]), "Volatility")
-        indicator_row("Stochastic K",    sk_val, *sk_read)
-        pr = ind["period_return"]
-        indicator_row("Period Return",   fmt_pct(pr),
-                       "▲" if pr and pr >= 0 else "▼",
-                       "#1a7340" if pr and pr >= 0 else "#721c24")
-        indicator_row("Volume Trend",    ind["volume_trend"])
-        indicator_row("Trend",           ind["trend"])
-        indicator_row("Candlestick",     ind["pattern"])
-        indicator_row("Candles used",    str(ind["candles"]))
+        indicator_row("RSI (14)",       rsi_val,  *rsi_read)
+        indicator_row("MACD Histogram", macd_val, *macd_read)
+        indicator_row("Bollinger %B",   boll_val, boll["position"])
+        indicator_row("EMA 50",         fmt_inr(ema50),  f"Price {'above' if ema50 and curr > ema50 else 'below'} EMA50" if ema50 else "—")
+        indicator_row("EMA 200",        fmt_inr(ema200), *ema_read)
+        indicator_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility measure")
+        indicator_row("Stochastic K",   sk_val, *sk_read)
+        indicator_row("Period Return",  fmt_pct(pr), "▲" if pr and pr >= 0 else "▼", "#1a7340" if pr and pr >= 0 else "#721c24")
+        indicator_row("Volume Trend",   ind["volume_trend"])
+        indicator_row("Trend",          ind["trend"])
+        indicator_row("Candlestick",    ind["pattern"])
+        indicator_row("Candles used",   str(ind["candles"]))
 
     with col_fund:
-        st.markdown("#### Fundamentals")
+        st.markdown("#### 📋 Fundamentals")
         pe  = price_data.get("pe_ratio")
         eps = price_data.get("eps")
         mc  = price_data.get("market_cap")
@@ -1210,50 +1138,56 @@ def main():
         roe = price_data.get("roe")
         dy  = price_data.get("dividend_yield")
         sec = price_data.get("sector")
+        bv  = price_data.get("book_value")
+        pb  = price_data.get("price_to_book")
+        cr  = price_data.get("current_ratio")
+        pm  = price_data.get("profit_margins")
 
-        indicator_row("P/E Ratio",       f"{pe:.1f}"          if pe  else "—")
-        indicator_row("EPS",             f"₹{eps:.2f}"        if eps else "—")
-        indicator_row("Market Cap",      f"₹{mc/1e7:.0f} Cr"  if mc  else "—")
-        indicator_row("Revenue Growth",  f"{rg*100:.1f}%"     if rg  else "—")
-        indicator_row("Debt / Equity",   f"{de:.2f}"          if de  else "—")
-        indicator_row("ROE",             f"{roe*100:.1f}%"    if roe else "—")
-        indicator_row("Dividend Yield",  f"{dy*100:.2f}%"     if dy  else "—")
-        indicator_row("Sector",          sec or "—")
-        indicator_row("52W High",        fmt_inr(price_data.get("52w_high")))
-        indicator_row("52W Low",         fmt_inr(price_data.get("52w_low")))
-        indicator_row("Data Source",     price_data["source"])
-        indicator_row("Last Updated",    price_data["time"] + " IST")
+        indicator_row("P/E Ratio",      f"{pe:.1f}" if pe else "—", "High" if pe and pe > 30 else "Moderate" if pe else "")
+        indicator_row("EPS",            f"₹{eps:.2f}" if eps else "—")
+        indicator_row("Market Cap",     f"₹{mc/1e7:.0f} Cr" if mc else "—")
+        indicator_row("Revenue Growth", f"{rg*100:.1f}%" if rg else "—")
+        indicator_row("Debt / Equity",  f"{de:.2f}" if de else "—", "High leverage" if de and de > 1 else "")
+        indicator_row("ROE",            f"{roe*100:.1f}%" if roe else "—", "Strong" if roe and roe > 0.15 else "")
+        indicator_row("Dividend Yield", f"{dy*100:.2f}%" if dy else "—")
+        indicator_row("Book Value",     f"₹{bv:.2f}" if bv else "—")
+        indicator_row("Price/Book",     f"{pb:.2f}x" if pb else "—")
+        indicator_row("Current Ratio",  f"{cr:.2f}" if cr else "—")
+        indicator_row("Profit Margin",  f"{pm*100:.1f}%" if pm else "—")
+        indicator_row("Sector",         sec or "—")
+        indicator_row("52W High",       fmt_inr(price_data.get("52w_high")))
+        indicator_row("52W Low",        fmt_inr(price_data.get("52w_low")))
+        indicator_row("Data Source",    price_data["source"])
+
+        if not any([pe, eps, mc, roe, de]):
+            st.caption("⚠️ Fundamental data unavailable from Yahoo Finance for this stock. "
+                       "This is common for smaller NSE stocks. "
+                       f"[View on MoneyControl]({get_news_link(ticker, stock['fullName'])[1]})")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── FEATURE B: Signal History Table ──────────────────────
-    st.markdown("### 🕐 Signal History — Last 10 Signals")
-    st.caption(f"Session history for **{stock['fullName']}** — refreshes each time you click Analyse")
+    # ── Signal History ────────────────────────────────────────
+    st.markdown("### 🕐 Signal History")
+    st.caption(f"Session history for **{stock['fullName']}** — last 10 analyses")
     render_signal_history(ticker)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Telegram alert ────────────────────────────────────────
     if curr >= sig["target_price"] * 0.98:
-        msg = (
-            f"Target Alert — {ticker}\n\n"
-            f"Current: {fmt_inr(curr)}\nTarget: {fmt_inr(sig['target_price'])}\n"
-            f"Signal: {signal}\nProfit: +{sig['profit_potential']:.1f}%\n"
-            f"Probability: {sig['success_prob']:.0f}%\nRegime: {sig['regime']}"
-        )
-        ok = send_telegram(msg)
-        if ok:
-            st.success("🎯 Target reached! Telegram alert sent to your account.")
-        else:
-            st.warning("Target reached but Telegram alert failed.")
+        msg = (f"🎯 Target Alert — {ticker}\n\nCurrent: {fmt_inr(curr)}\n"
+               f"Target: {fmt_inr(sig['target_price'])}\nSignal: {signal}\n"
+               f"Profit: +{sig['profit_potential']:.1f}%\nProbability: {sig['success_prob']:.0f}%")
+        ok  = send_telegram(msg)
+        st.success("🎯 Target reached! Telegram alert sent.") if ok else st.warning("Target reached but Telegram alert failed.")
 
     # ── Disclaimer ────────────────────────────────────────────
     st.markdown(f"""
     <div class="disclaimer">
-        Data from {price_data['source']}. Signals based on rule-based indicator confluence — not AI or financial advice.
-        Always consult a SEBI-registered advisor before investing. NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
-    </div>
-    """, unsafe_allow_html=True)
+      ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence — <b>not financial advice</b>.
+      Always consult a SEBI-registered investment advisor before investing.
+      NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
+    </div>""", unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
