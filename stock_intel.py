@@ -35,6 +35,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+
 # ── Theme-aware CSS (works on both light & dark Streamlit themes) ──
 st.markdown("""
 <style>
@@ -870,10 +872,16 @@ def main():
     # ── Polished Sidebar ──────────────────────────────────────
     with st.sidebar:
         st.markdown("""
-        <div style="text-align:center;padding:8px 0 4px">
-          <div style="font-size:36px">🐂</div>
-          <div style="font-size:16px;font-weight:700;letter-spacing:0.02em">MB Stock Intelligence</div>
-          <div style="font-size:11px;color:#6c757d;margin-top:2px">Enhanced Edition · NSE India</div>
+        <div style="text-align:center;padding:16px 8px 12px">
+          <div style="font-size:42px;margin-bottom:6px">🐂</div>
+          <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;
+              background:linear-gradient(135deg,#58a6ff,#00ff88);
+              -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+              MB STOCK INTEL
+          </div>
+          <div style="font-size:11px;color:#6e7681;margin-top:4px;letter-spacing:0.08em;">
+              ENHANCED EDITION · NSE INDIA
+          </div>
         </div>""", unsafe_allow_html=True)
         st.markdown("---")
 
