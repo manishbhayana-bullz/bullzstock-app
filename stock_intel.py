@@ -143,9 +143,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Config ────────────────────────────────────────────────────
-AV_KEY   = ""
-TG_TOKEN = ""
-TG_CHAT  = ""
+AV_KEY   = st.secrets.get("AV_KEY", "")
+TG_TOKEN = st.secrets.get("TG_TOKEN", "")
+TG_CHAT  = st.secrets.get("TG_CHAT", "")
 
 INDUSTRY_ICONS = {
     "IT": "💻", "Banking": "🏦", "FMCG": "🛒", "Fintech": "💳",
