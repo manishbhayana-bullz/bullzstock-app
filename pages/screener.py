@@ -326,11 +326,11 @@ def generate_trade_signal(ticker, raw_data, score, strategy_key):
 def get_ai_commentary(ticker, trade, score, strategy_key):
     """
     Call Google Gemini API (free tier) for natural language stock commentary.
-    Uses trade signal data already computed — no extra data fetch needed.
     Get free API key: aistudio.google.com → Get API Key (no credit card needed)
-    Add to Streamlit secrets: GEMINI_API_KEY = "your-key-here"
+    Add to Streamlit secrets: GEMINI_API_KEY = "AIza..."
     """
     import requests
+    import streamlit as _st
 
     prompt = f"""You are a concise stock market analyst for Indian NSE stocks.
 Analyze this stock and give a 3-4 line trading commentary.
@@ -359,12 +359,19 @@ Write exactly 4 sentences:
 Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
 
     try:
-        api_key = st.secrets.get("GEMINI_API_KEY", "")
-        if not api_key:
-            return None
+        # Read API key from Streamlit secrets
+        try:
+            api_key = _st.secrets["GEMINI_API_KEY"]
+        except (KeyError, FileNotFoundError):
+            api_key = ""
+
+        if not api_key or api_key.strip() == "":
+            return "__NO_KEY__"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key.strip()}"
 
         response = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
+            url,
             headers={"Content-Type": "application/json"},
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -374,15 +381,25 @@ Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
                     "topP": 0.9,
                 }
             },
-            timeout=15
+            timeout=20
         )
+
         if response.status_code == 200:
             data = response.json()
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        elif response.status_code == 400:
+            return f"__ERROR_400__: {response.text[:200]}"
+        elif response.status_code == 403:
+            return "__ERROR_403__: API key invalid or not enabled for Gemini API"
+        elif response.status_code == 429:
+            return "__ERROR_429__: Rate limit hit — free tier allows 1500/day"
         else:
-            return None
-    except Exception:
-        return None
+            return f"__ERROR_{response.status_code}__: {response.text[:200]}"
+
+    except requests.exceptions.Timeout:
+        return "__ERROR_TIMEOUT__"
+    except Exception as e:
+        return f"__ERROR_EXCEPTION__: {str(e)[:200]}"
 
 
 def render_trade_panel(ticker, raw_data, score, strategy_key):
@@ -567,12 +584,16 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
     # ── AI COMMENTARY (Gemini) ────────────────────────────────────────────────
     st.markdown("**🤖 AI Commentary:**")
 
-    has_api_key = bool(st.secrets.get("GEMINI_API_KEY", ""))
+    try:
+        has_api_key = bool(st.secrets["GEMINI_API_KEY"])
+    except (KeyError, FileNotFoundError):
+        has_api_key = False
 
     if has_api_key:
         with st.spinner("Generating AI analysis..."):
             commentary = get_ai_commentary(ticker, trade, score, strategy_key)
-        if commentary:
+
+        if commentary and not commentary.startswith("__ERROR") and commentary != "__NO_KEY__":
             st.markdown(f"""
             <div style="background:#0d1117;border:1px solid #30363d;
                 border-left:4px solid #00d4ff;
@@ -585,8 +606,15 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
                 {commentary}
             </div>
             """, unsafe_allow_html=True)
+        elif commentary and commentary.startswith("__ERROR"):
+            # Show actual error for debugging
+            error_msg = commentary.replace("__ERROR_", "").replace("__", "")
+            st.error(f"🔴 Gemini API error: {error_msg}")
+            st.caption("Share this error message so we can fix it.")
+        elif commentary == "__NO_KEY__":
+            st.warning("GEMINI_API_KEY found in secrets but returned empty — check for extra spaces in the key.")
         else:
-            st.info("AI commentary unavailable right now. Check your GEMINI_API_KEY in Streamlit secrets.")
+            st.warning("AI commentary returned empty. Try again or check Streamlit logs.")
     else:
         st.markdown("""
         <div style="background:#161b22;border:1px solid #30363d;
