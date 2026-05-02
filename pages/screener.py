@@ -377,34 +377,31 @@ Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key.strip()}"
 
-        for attempt in range(3):
-            response = requests.post(
-                url,
-                headers={"Content-Type": "application/json"},
-                json={
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": 300,
-                        "temperature": 0.7,
-                        "topP": 0.9,
-                    }
-                },
-                timeout=20
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            elif response.status_code == 429:
-                if attempt < 2:
-                    _time.sleep(5 + attempt * 5)  # wait 5s, then 10s
-                    continue
-                return "__ERROR_429__: Rate limit — wait 1 minute and try again"
-            elif response.status_code == 400:
-                return f"__ERROR_400__: {response.text[:200]}"
-            elif response.status_code == 403:
-                return "__ERROR_403__: API key invalid or not enabled for Gemini API"
-            else:
-                return f"__ERROR_{response.status_code}__: {response.text[:200]}"
+        response = requests.post(
+            url,
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "maxOutputTokens": 300,
+                    "temperature": 0.7,
+                    "topP": 0.9,
+                }
+            },
+            timeout=20
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        elif response.status_code == 429:
+            return "__ERROR_429__: Rate limit hit — wait 60 seconds and click Generate again"
+        elif response.status_code == 400:
+            return f"__ERROR_400__: {response.text[:200]}"
+        elif response.status_code == 403:
+            return "__ERROR_403__: API key invalid — regenerate at aistudio.google.com"
+        else:
+            return f"__ERROR_{response.status_code}__: {response.text[:200]}"
 
     except requests.exceptions.Timeout:
         return "__ERROR_TIMEOUT__"
@@ -600,33 +597,56 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
         has_api_key = False
 
     if has_api_key:
-        with st.spinner("Generating AI analysis..."):
-            # Pass trade as sorted tuple for cache compatibility
-            trade_tuple = tuple(sorted(trade.items()))
-            commentary = get_ai_commentary(ticker, trade_tuple, score, strategy_key)
+        # Use a session state key per ticker so commentary persists on rerun
+        cache_key = f"ai_commentary_{ticker}_{strategy_key}"
 
-        if commentary and not commentary.startswith("__ERROR") and commentary != "__NO_KEY__":
-            st.markdown(f"""
-            <div style="background:#0d1117;border:1px solid #30363d;
-                border-left:4px solid #00d4ff;
-                border-radius:8px;padding:16px 18px;margin:8px 0;
-                font-size:0.95rem;color:#e6edf3;line-height:1.8;">
-                <div style="font-size:10px;font-weight:700;color:#00d4ff;
-                    letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">
-                    ✦ Gemini AI Analysis
+        # Show cached result if already generated
+        if cache_key in st.session_state:
+            commentary = st.session_state[cache_key]
+            if commentary and not commentary.startswith("__ERROR") and commentary != "__NO_KEY__":
+                st.markdown(f"""
+                <div style="background:#0d1117;border:1px solid #30363d;
+                    border-left:4px solid #00d4ff;
+                    border-radius:8px;padding:16px 18px;margin:8px 0;
+                    font-size:0.95rem;color:#e6edf3;line-height:1.8;">
+                    <div style="font-size:10px;font-weight:700;color:#00d4ff;
+                        letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">
+                        ✦ Gemini AI Analysis · {ticker}
+                    </div>
+                    {commentary}
                 </div>
-                {commentary}
+                """, unsafe_allow_html=True)
+                if st.button("🔄 Regenerate", key=f"regen_{ticker}"):
+                    del st.session_state[cache_key]
+                    st.rerun()
+                st.markdown("")
+            else:
+                error_msg = str(commentary).replace("__ERROR_", "").replace("__", "")
+                st.error(f"🔴 Gemini error: {error_msg}")
+                if st.button("Retry", key=f"retry_{ticker}"):
+                    del st.session_state[cache_key]
+                    st.rerun()
+        else:
+            # Show generate button — only calls API on explicit click
+            st.markdown("""
+            <div style="background:#0d1117;border:1px solid #30363d;
+                border-left:4px solid #30363d;border-radius:8px;
+                padding:12px 16px;margin:8px 0;font-size:0.85rem;color:#8b949e;">
+                Click below to generate AI-powered analysis for this stock.
+                Uses Google Gemini — 1 API call per stock.
             </div>
             """, unsafe_allow_html=True)
-        elif commentary and commentary.startswith("__ERROR"):
-            # Show actual error for debugging
-            error_msg = commentary.replace("__ERROR_", "").replace("__", "")
-            st.error(f"🔴 Gemini API error: {error_msg}")
-            st.caption("Share this error message so we can fix it.")
-        elif commentary == "__NO_KEY__":
-            st.warning("GEMINI_API_KEY found in secrets but returned empty — check for extra spaces in the key.")
-        else:
-            st.warning("AI commentary returned empty. Try again or check Streamlit logs.")
+            if st.button(
+                "✦ Generate AI Analysis",
+                key=f"gen_{ticker}",
+                type="primary",
+                use_container_width=False
+            ):
+                with st.spinner("Gemini is analysing..."):
+                    trade_tuple = tuple(sorted(trade.items()))
+                    result = get_ai_commentary(ticker, trade_tuple, score, strategy_key)
+                    st.session_state[cache_key] = result
+                    st.rerun()
     else:
         st.markdown("""
         <div style="background:#161b22;border:1px solid #30363d;
