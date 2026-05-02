@@ -368,7 +368,7 @@ Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
         if not api_key or api_key.strip() == "":
             return "__NO_KEY__"
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key.strip()}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key.strip()}"
 
         response = requests.post(
             url,
