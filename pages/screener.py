@@ -323,14 +323,19 @@ def generate_trade_signal(ticker, raw_data, score, strategy_key):
 
 # ─── AI COMMENTARY (Google Gemini — Free) ────────────────────────────────────
 
-def get_ai_commentary(ticker, trade, score, strategy_key):
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_ai_commentary(ticker, trade_tuple, score, strategy_key):
     """
     Call Google Gemini API (free tier) for natural language stock commentary.
+    Cached 1 hour per ticker — avoids rate limit on repeated selections.
     Get free API key: aistudio.google.com → Get API Key (no credit card needed)
     Add to Streamlit secrets: GEMINI_API_KEY = "AIza..."
     """
     import requests
     import streamlit as _st
+
+    # Unpack from tuple for cache compatibility
+    trade = dict(trade_tuple)
 
     prompt = f"""You are a concise stock market analyst for Indian NSE stocks.
 Analyze this stock and give a 3-4 line trading commentary.
@@ -368,33 +373,38 @@ Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
         if not api_key or api_key.strip() == "":
             return "__NO_KEY__"
 
+        import time as _time
+
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key.strip()}"
 
-        response = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "maxOutputTokens": 300,
-                    "temperature": 0.7,
-                    "topP": 0.9,
-                }
-            },
-            timeout=20
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        elif response.status_code == 400:
-            return f"__ERROR_400__: {response.text[:200]}"
-        elif response.status_code == 403:
-            return "__ERROR_403__: API key invalid or not enabled for Gemini API"
-        elif response.status_code == 429:
-            return "__ERROR_429__: Rate limit hit — free tier allows 1500/day"
-        else:
-            return f"__ERROR_{response.status_code}__: {response.text[:200]}"
+        for attempt in range(3):
+            response = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "maxOutputTokens": 300,
+                        "temperature": 0.7,
+                        "topP": 0.9,
+                    }
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            elif response.status_code == 429:
+                if attempt < 2:
+                    _time.sleep(5 + attempt * 5)  # wait 5s, then 10s
+                    continue
+                return "__ERROR_429__: Rate limit — wait 1 minute and try again"
+            elif response.status_code == 400:
+                return f"__ERROR_400__: {response.text[:200]}"
+            elif response.status_code == 403:
+                return "__ERROR_403__: API key invalid or not enabled for Gemini API"
+            else:
+                return f"__ERROR_{response.status_code}__: {response.text[:200]}"
 
     except requests.exceptions.Timeout:
         return "__ERROR_TIMEOUT__"
@@ -591,7 +601,9 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
 
     if has_api_key:
         with st.spinner("Generating AI analysis..."):
-            commentary = get_ai_commentary(ticker, trade, score, strategy_key)
+            # Pass trade as sorted tuple for cache compatibility
+            trade_tuple = tuple(sorted(trade.items()))
+            commentary = get_ai_commentary(ticker, trade_tuple, score, strategy_key)
 
         if commentary and not commentary.startswith("__ERROR") and commentary != "__NO_KEY__":
             st.markdown(f"""
