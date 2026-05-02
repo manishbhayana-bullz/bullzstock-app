@@ -321,92 +321,92 @@ def generate_trade_signal(ticker, raw_data, score, strategy_key):
 
 
 
-# ─── AI COMMENTARY (Google Gemini — Free) ────────────────────────────────────
+# ─── RULE-BASED AI COMMENTARY (No API — Unlimited — Always works) ─────────────
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def get_ai_commentary(ticker, trade_tuple, score, strategy_key):
+def generate_commentary(ticker, trade, score, strategy_key):
     """
-    Call Google Gemini API (free tier) for natural language stock commentary.
-    Cached 1 hour per ticker — avoids rate limit on repeated selections.
-    Get free API key: aistudio.google.com → Get API Key (no credit card needed)
-    Add to Streamlit secrets: GEMINI_API_KEY = "AIza..."
+    Generates natural language stock commentary from computed signal data.
+    No external API. No rate limits. No cost. Always works.
+    Produces 4 sentences: technical picture, signal reason, risk, action.
     """
-    import requests
-    import streamlit as _st
+    rsi       = trade["rsi"]
+    signal    = trade["signal"]
+    trend     = trade["trend"]
+    conf      = trade["confidence"]
+    entry     = trade["entry"]
+    sl        = trade["stop_loss"]
+    sl_pct    = trade["sl_pct"]
+    t1        = trade["target1"]
+    t1_pct    = trade["t1_pct"]
+    t2        = trade["target2"]
+    t2_pct    = trade["t2_pct"]
+    price     = trade["price"]
+    rationale = trade["rationale"]
 
-    # Unpack from tuple for cache compatibility
-    trade = dict(trade_tuple)
+    # ── Sentence 1: Technical picture ────────────────────────────────────────
+    if rsi > 70:
+        rsi_desc = f"RSI is overbought at {rsi}, indicating strong momentum but limited room to run further"
+    elif rsi > 60:
+        rsi_desc = f"RSI is strong at {rsi}, showing healthy momentum with some room before overbought territory"
+    elif rsi > 50:
+        rsi_desc = f"RSI is neutral-bullish at {rsi}, suggesting steady upward bias without being stretched"
+    elif rsi > 40:
+        rsi_desc = f"RSI is neutral at {rsi}, reflecting indecision — neither strongly bullish nor bearish"
+    elif rsi > 30:
+        rsi_desc = f"RSI is neutral-low at {rsi}, showing weakness but not yet in oversold territory"
+    else:
+        rsi_desc = f"RSI is oversold at {rsi}, suggesting the stock may be due for a technical bounce"
 
-    prompt = f"""You are a concise stock market analyst for Indian NSE stocks.
-Analyze this stock and give a 3-4 line trading commentary.
+    trend_desc = {
+        "Strong ↑": "price is trading above all key moving averages confirming a strong uptrend",
+        "Mixed →":  "price is trading above some but not all moving averages showing a mixed trend",
+        "Weak ↓":   "price is trading below key moving averages indicating a downtrend"
+    }.get(trend, "trend is unclear")
 
-Stock: {ticker} (NSE India)
-Current Price: ₹{trade['price']:,.2f}
-Signal: {trade['signal']}
-Confidence: {trade['confidence']}
-RSI: {trade['rsi']}
-Trend: {trade['trend']}
-ATR: ₹{trade['atr']:,.2f}
-Entry: ₹{trade['entry']:,.1f}
-Stop Loss: ₹{trade['stop_loss']:,.1f} (-{trade['sl_pct']}%)
-Target 1: ₹{trade['target1']:,.1f} (+{trade['t1_pct']}%)
-Target 2: ₹{trade['target2']:,.1f} (+{trade['t2_pct']}%)
-Strategy: {strategy_key}
-Composite Score: {score}/100
-Signal Rationale: {', '.join(trade['rationale'])}
+    s1 = f"{ticker} is showing {rsi_desc}, and {trend_desc}."
 
-Write exactly 4 sentences:
-1. Current technical picture in plain English
-2. Key reason for the {trade['signal']} signal
-3. Main risk to watch right now
-4. One specific actionable sentence for a retail investor
+    # ── Sentence 2: Signal reason ─────────────────────────────────────────────
+    primary_reason = rationale[0] if rationale else "multiple technical factors align"
 
-Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
+    signal_context = {
+        "BUY":            "bullish setup",
+        "WEAK BUY":       "moderately bullish setup",
+        "NEUTRAL / WATCH":"neutral setup — no clear directional edge",
+        "SELL / AVOID":   "bearish setup"
+    }.get(signal, "technical setup")
 
-    try:
-        # Read API key from Streamlit secrets
-        try:
-            api_key = _st.secrets["GEMINI_API_KEY"]
-        except (KeyError, FileNotFoundError):
-            api_key = ""
+    s2 = f"The {signal} signal ({conf} confidence, score {score}/100) is driven by {primary_reason.lower()}."
 
-        if not api_key or api_key.strip() == "":
-            return "__NO_KEY__"
+    # ── Sentence 3: Key risk ──────────────────────────────────────────────────
+    if rsi > 68:
+        risk = f"the main risk is a pullback from overbought RSI levels — avoid chasing above ₹{price:,.0f}"
+    elif signal in ("SELL / AVOID", "NEUTRAL / WATCH"):
+        risk = f"the stock lacks directional conviction — entering without a clear trigger risks being stuck in a sideways move"
+    elif sl_pct > 5:
+        risk = f"the stop loss at ₹{sl:,.1f} is {sl_pct}% away — position size carefully to manage risk"
+    elif trend == "Weak ↓":
+        risk = f"the broader trend is still weak — a false breakout could trigger a sharp move below ₹{sl:,.1f}"
+    else:
+        risk = f"a break below ₹{sl:,.1f} (stop loss) would invalidate this setup and signal further downside"
 
-        import time as _time
+    s3 = f"Key risk to watch: {risk}."
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key.strip()}"
+    # ── Sentence 4: Actionable ────────────────────────────────────────────────
+    if signal == "BUY" and conf == "High":
+        s4 = (f"Consider entering near ₹{entry:,.1f} with a strict stop at ₹{sl:,.1f}, "
+              f"targeting ₹{t1:,.1f} (+{t1_pct}%) first and ₹{t2:,.1f} (+{t2_pct}%) "
+              f"on continuation — this is the {strategy_key} strategy setup.")
+    elif signal in ("BUY", "WEAK BUY"):
+        s4 = (f"A cautious entry near ₹{entry:,.1f} with stop at ₹{sl:,.1f} "
+              f"targets ₹{t1:,.1f} (+{t1_pct}%) — wait for volume confirmation before adding size.")
+    elif signal == "NEUTRAL / WATCH":
+        s4 = (f"Stay on the watchlist — wait for RSI to move decisively above 55 or "
+              f"a MACD bullish crossover before committing capital to this name.")
+    else:
+        s4 = (f"Avoid fresh long positions — wait for price to stabilise above ₹{entry:,.1f} "
+              f"and RSI to recover above 45 before reconsidering this stock.")
 
-        response = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "maxOutputTokens": 300,
-                    "temperature": 0.7,
-                    "topP": 0.9,
-                }
-            },
-            timeout=20
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        elif response.status_code == 429:
-            return "__ERROR_429__: Rate limit hit — wait 60 seconds and click Generate again"
-        elif response.status_code == 400:
-            return f"__ERROR_400__: {response.text[:200]}"
-        elif response.status_code == 403:
-            return "__ERROR_403__: API key invalid — regenerate at aistudio.google.com"
-        else:
-            return f"__ERROR_{response.status_code}__: {response.text[:200]}"
-
-    except requests.exceptions.Timeout:
-        return "__ERROR_TIMEOUT__"
-    except Exception as e:
-        return f"__ERROR_EXCEPTION__: {str(e)[:200]}"
+    return f"{s1} {s2} {s3} {s4}"
 
 
 def render_trade_panel(ticker, raw_data, score, strategy_key):
@@ -588,91 +588,26 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
 
     st.markdown("")
 
-    # ── AI COMMENTARY (Gemini) ────────────────────────────────────────────────
-    st.markdown("**🤖 AI Commentary:**")
-
-    try:
-        has_api_key = bool(st.secrets["GEMINI_API_KEY"])
-    except (KeyError, FileNotFoundError):
-        has_api_key = False
-
-    if has_api_key:
-        # Use a session state key per ticker so commentary persists on rerun
-        cache_key = f"ai_commentary_{ticker}_{strategy_key}"
-
-        # Show cached result if already generated
-        if cache_key in st.session_state:
-            commentary = st.session_state[cache_key]
-            if commentary and not commentary.startswith("__ERROR") and commentary != "__NO_KEY__":
-                st.markdown(f"""
-                <div style="background:#0d1117;border:1px solid #30363d;
-                    border-left:4px solid #00d4ff;
-                    border-radius:8px;padding:16px 18px;margin:8px 0;
-                    font-size:0.95rem;color:#e6edf3;line-height:1.8;">
-                    <div style="font-size:10px;font-weight:700;color:#00d4ff;
-                        letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">
-                        ✦ Gemini AI Analysis · {ticker}
-                    </div>
-                    {commentary}
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🔄 Regenerate", key=f"regen_{ticker}"):
-                    del st.session_state[cache_key]
-                    st.rerun()
-                st.markdown("")
-            else:
-                error_msg = str(commentary).replace("__ERROR_", "").replace("__", "")
-                st.error(f"🔴 Gemini error: {error_msg}")
-                if st.button("Retry", key=f"retry_{ticker}"):
-                    del st.session_state[cache_key]
-                    st.rerun()
-        else:
-            # Show generate button — only calls API on explicit click
-            st.markdown("""
-            <div style="background:#0d1117;border:1px solid #30363d;
-                border-left:4px solid #30363d;border-radius:8px;
-                padding:12px 16px;margin:8px 0;font-size:0.85rem;color:#8b949e;">
-                Click below to generate AI-powered analysis for this stock.
-                Uses Google Gemini — 1 API call per stock.
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button(
-                "✦ Generate AI Analysis",
-                key=f"gen_{ticker}",
-                type="primary",
-                use_container_width=False
-            ):
-                with st.spinner("Gemini is analysing..."):
-                    trade_tuple = tuple(sorted(trade.items()))
-                    result = get_ai_commentary(ticker, trade_tuple, score, strategy_key)
-                    st.session_state[cache_key] = result
-                    st.rerun()
-    else:
-        st.markdown("""
-        <div style="background:#161b22;border:1px solid #30363d;
-            border-left:4px solid #ffd43b;
-            border-radius:8px;padding:14px 16px;margin:8px 0;
-            font-size:0.9rem;color:#8b949e;">
-            <div style="font-size:10px;font-weight:700;color:#ffd43b;
-                letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">
-                ✦ AI Commentary — Setup Required
-            </div>
-            <strong style="color:#e6edf3;">Enable free AI commentary in 3 steps:</strong><br><br>
-            1. Go to <a href="https://aistudio.google.com" target="_blank"
-               style="color:#58a6ff;">aistudio.google.com</a>
-               → Sign in with Google → click <strong>Get API Key</strong><br>
-            2. Copy your API key (starts with <code>AIza...</code>)<br>
-            3. In Streamlit Cloud → your app →
-               <strong>Settings → Secrets</strong> → add:<br>
-            <code style="display:block;margin-top:8px;padding:8px;
-                background:#0d1117;border-radius:4px;color:#58a6ff;">
-                GEMINI_API_KEY = "AIza..."
-            </code>
-            <div style="margin-top:8px;font-size:0.8rem;color:#6e7681;">
-                Free tier: 1,500 requests/day · No credit card needed
-            </div>
+    # ── AI COMMENTARY (Rule-based — No API — Unlimited) ───────────────────────
+    commentary = generate_commentary(ticker, trade, score, strategy_key)
+    st.markdown(f"""
+    <div style="background:#0d1117;border:1px solid #30363d;
+        border-left:4px solid #00d4ff;
+        border-radius:8px;padding:16px 18px;margin:8px 0;
+        font-size:0.95rem;color:#e6edf3;line-height:1.9;">
+        <div style="font-size:10px;font-weight:700;color:#00d4ff;
+            letter-spacing:0.09em;text-transform:uppercase;margin-bottom:10px;
+            display:flex;align-items:center;gap:6px;">
+            ✦ AI Analysis &nbsp;·&nbsp;
+            <span style="color:#3fb950;font-size:9px;">● LIVE</span>
+            &nbsp;·&nbsp;
+            <span style="font-size:9px;color:#6e7681;font-weight:400;">
+                {ticker} · {strategy_key} strategy · Score {score}/100
+            </span>
         </div>
-        """, unsafe_allow_html=True)
+        {commentary}
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("")
     st.caption("⚠️ Educational only. Not financial advice. Always use your own judgement.")
