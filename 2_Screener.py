@@ -321,18 +321,17 @@ def generate_trade_signal(ticker, raw_data, score, strategy_key):
 
 
 
-# ─── P6: CLAUDE AI COMMENTARY ─────────────────────────────────────────────────
+# ─── AI COMMENTARY (Google Gemini — Free) ────────────────────────────────────
 
-def get_claude_commentary(ticker, trade, score, strategy_key):
+def get_ai_commentary(ticker, trade, score, strategy_key):
     """
-    Call Claude API to generate natural language stock commentary.
-    Uses the trade signal data already computed — no extra data fetch needed.
+    Call Google Gemini API (free tier) for natural language stock commentary.
+    Uses trade signal data already computed — no extra data fetch needed.
+    Get free API key: aistudio.google.com → Get API Key (no credit card needed)
+    Add to Streamlit secrets: GEMINI_API_KEY = "your-key-here"
     """
     import requests
-    import json
-    import streamlit as st
 
-    # Build a rich prompt from computed signal data
     prompt = f"""You are a concise stock market analyst for Indian NSE stocks.
 Analyze this stock and give a 3-4 line trading commentary.
 
@@ -340,7 +339,7 @@ Stock: {ticker} (NSE India)
 Current Price: ₹{trade['price']:,.2f}
 Signal: {trade['signal']}
 Confidence: {trade['confidence']}
-RSI: {trade['rsi']} 
+RSI: {trade['rsi']}
 Trend: {trade['trend']}
 ATR: ₹{trade['atr']:,.2f}
 Entry: ₹{trade['entry']:,.1f}
@@ -351,32 +350,35 @@ Strategy: {strategy_key}
 Composite Score: {score}/100
 Signal Rationale: {', '.join(trade['rationale'])}
 
-Write a 3-4 line commentary that:
-1. Summarizes the current technical picture in plain English
-2. Explains the key reason for the signal (bullish/bearish/neutral)
-3. Mentions the key risk to watch
-4. Ends with one actionable sentence
+Write exactly 4 sentences:
+1. Current technical picture in plain English
+2. Key reason for the {trade['signal']} signal
+3. Main risk to watch right now
+4. One specific actionable sentence for a retail investor
 
-Be direct and specific. Use Indian market context. No disclaimers needed."""
+Be direct. Use Indian market context (NSE, Nifty, FII/DII). No disclaimers."""
 
     try:
+        api_key = st.secrets.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return None
+
         response = requests.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": st.secrets.get("ANTHROPIC_API_KEY", ""),
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
+            headers={"Content-Type": "application/json"},
             json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 300,
-                "messages": [{"role": "user", "content": prompt}]
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "maxOutputTokens": 300,
+                    "temperature": 0.7,
+                    "topP": 0.9,
+                }
             },
             timeout=15
         )
         if response.status_code == 200:
             data = response.json()
-            return data["content"][0]["text"].strip()
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
         else:
             return None
     except Exception:
@@ -562,31 +564,53 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
 
     st.markdown("")
 
-    # ── P6: AI COMMENTARY ─────────────────────────────────────────────────────
+    # ── AI COMMENTARY (Gemini) ────────────────────────────────────────────────
     st.markdown("**🤖 AI Commentary:**")
 
-    import streamlit as st_inner
-    has_api_key = bool(st_inner.secrets.get("ANTHROPIC_API_KEY", ""))
+    has_api_key = bool(st.secrets.get("GEMINI_API_KEY", ""))
 
     if has_api_key:
         with st.spinner("Generating AI analysis..."):
-            commentary = get_claude_commentary(ticker, trade, score, strategy_key)
+            commentary = get_ai_commentary(ticker, trade, score, strategy_key)
         if commentary:
             st.markdown(f"""
-            <div style="background:#161b22;border:1px solid #30363d;border-left:3px solid #58a6ff;
-                border-radius:8px;padding:14px 16px;margin:8px 0;
-                font-size:0.95rem;color:#e6edf3;line-height:1.7;">
+            <div style="background:#0d1117;border:1px solid #30363d;
+                border-left:4px solid #00d4ff;
+                border-radius:8px;padding:16px 18px;margin:8px 0;
+                font-size:0.95rem;color:#e6edf3;line-height:1.8;">
+                <div style="font-size:10px;font-weight:700;color:#00d4ff;
+                    letter-spacing:0.08em;text-transform:uppercase;margin-bottom:8px;">
+                    ✦ Gemini AI Analysis
+                </div>
                 {commentary}
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("AI commentary unavailable right now.")
+            st.info("AI commentary unavailable right now. Check your GEMINI_API_KEY in Streamlit secrets.")
     else:
         st.markdown("""
-        <div style="background:#161b22;border:1px solid #30363d;border-left:3px solid #ffd43b;
-            border-radius:8px;padding:12px 16px;margin:8px 0;font-size:0.9rem;color:#8b949e;">
-            🔑 Add your Anthropic API key in Streamlit Cloud Secrets to enable AI commentary.<br>
-            <code>ANTHROPIC_API_KEY = "sk-ant-..."</code>
+        <div style="background:#161b22;border:1px solid #30363d;
+            border-left:4px solid #ffd43b;
+            border-radius:8px;padding:14px 16px;margin:8px 0;
+            font-size:0.9rem;color:#8b949e;">
+            <div style="font-size:10px;font-weight:700;color:#ffd43b;
+                letter-spacing:0.08em;text-transform:uppercase;margin-bottom:6px;">
+                ✦ AI Commentary — Setup Required
+            </div>
+            <strong style="color:#e6edf3;">Enable free AI commentary in 3 steps:</strong><br><br>
+            1. Go to <a href="https://aistudio.google.com" target="_blank"
+               style="color:#58a6ff;">aistudio.google.com</a>
+               → Sign in with Google → click <strong>Get API Key</strong><br>
+            2. Copy your API key (starts with <code>AIza...</code>)<br>
+            3. In Streamlit Cloud → your app →
+               <strong>Settings → Secrets</strong> → add:<br>
+            <code style="display:block;margin-top:8px;padding:8px;
+                background:#0d1117;border-radius:4px;color:#58a6ff;">
+                GEMINI_API_KEY = "AIza..."
+            </code>
+            <div style="margin-top:8px;font-size:0.8rem;color:#6e7681;">
+                Free tier: 1,500 requests/day · No credit card needed
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -598,38 +622,94 @@ def render_trade_panel(ticker, raw_data, score, strategy_key):
 
 def render_screener_page():
     st.set_page_config(
-        page_title="Stock Screener",
+        page_title="BullzStock Screener",
         page_icon="🔍",
         layout="wide"
     )
-    # Fix sidebar nav text via CSS
     st.markdown("""
     <style>
-    /* Capitalize sidebar nav links */
+    /* ── Global dark fintech theme ── */
+    .stApp { background-color: #0d1117; }
+    section[data-testid="stSidebar"] { background-color: #0d1117 !important; border-right: 1px solid #21262d; }
+
+    /* Sidebar nav */
     section[data-testid="stSidebarNav"] ul li a p {
         text-transform: capitalize !important;
         font-size: 14px !important;
         font-weight: 600 !important;
         letter-spacing: 0.02em !important;
+        color: #8b949e !important;
     }
     section[data-testid="stSidebarNav"] ul li a {
         padding: 6px 12px !important;
     }
-    </style>
-    """, unsafe_allow_html=True)
-    st.markdown("""<style>
-    [data-testid="stSidebarNav"] a p {
-    }
-    </style>""", unsafe_allow_html=True)
-    st.markdown("""
-    <style>
-    [data-testid="stSidebarNav"] a span {
-    }
     [data-testid="stSidebarNav"] a[aria-current="page"] span {
         color: #58a6ff !important;
     }
+
+    /* Metric cards */
+    [data-testid="metric-container"] {
+        background: #161b22 !important;
+        border: 1px solid #21262d !important;
+        border-radius: 10px !important;
+        padding: 14px !important;
+    }
+    [data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 11px !important; }
+    [data-testid="stMetricValue"] { color: #e6edf3 !important; font-size: 20px !important; font-weight: 700 !important; }
+    [data-testid="stMetricDelta"] { font-size: 12px !important; }
+
+    /* Dataframe */
+    [data-testid="stDataFrame"] { border: 1px solid #21262d !important; border-radius: 8px !important; }
+
+    /* Buttons */
+    [data-testid="baseButton-primary"] {
+        background: linear-gradient(135deg, #1c3a5e, #185FA5) !important;
+        border: 1px solid #58a6ff44 !important;
+        border-radius: 8px !important;
+        color: #58a6ff !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="baseButton-secondary"] {
+        background: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 8px !important;
+        color: #8b949e !important;
+    }
+
+    /* Selectbox */
+    [data-testid="stSelectbox"] > div > div {
+        background: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 8px !important;
+        color: #e6edf3 !important;
+    }
+
+    /* Info / warning boxes */
+    [data-testid="stInfo"] {
+        background: #0d2137 !important;
+        border: 1px solid #1c3a5e !important;
+        border-radius: 8px !important;
+        color: #58a6ff !important;
+    }
+
+    /* Expander */
+    [data-testid="stExpander"] {
+        background: #161b22 !important;
+        border: 1px solid #21262d !important;
+        border-radius: 8px !important;
+    }
+
+    /* Progress bar */
+    [data-testid="stProgressBar"] > div > div { background: #58a6ff !important; }
+
+    /* Divider */
+    hr { border-color: #21262d !important; }
+
+    /* Text */
+    h1,h2,h3,h4 { color: #e6edf3 !important; }
+    p, li, span { color: #c9d1d9; }
     </style>""", unsafe_allow_html=True)
-    
+
     st.markdown("""
     <div style="font-size:2rem;font-weight:800;
         background:linear-gradient(135deg,#00d4ff,#00ff88);
