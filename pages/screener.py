@@ -656,17 +656,16 @@ def render_screener_page():
     )
     st.markdown("""
     <style>
-    /* ── Global dark fintech theme ── */
-    .stApp { background-color: #0d1117; }
-    section[data-testid="stSidebar"] { background-color: #0d1117 !important; border-right: 1px solid #21262d; }
+    /* ── Suppress Streamlit text-selection toolbar popup ── */
+    [data-testid="stTextSelectionToolbar"] { display: none !important; }
+    .st-emotion-cache-selection-toolbar { display: none !important; }
 
-    /* Sidebar nav */
+    /* ── Sidebar nav ── */
     section[data-testid="stSidebarNav"] ul li a p {
         text-transform: capitalize !important;
         font-size: 14px !important;
         font-weight: 600 !important;
         letter-spacing: 0.02em !important;
-        color: #8b949e !important;
     }
     section[data-testid="stSidebarNav"] ul li a {
         padding: 6px 12px !important;
@@ -675,67 +674,40 @@ def render_screener_page():
         color: #58a6ff !important;
     }
 
-    /* Metric cards */
+    /* ── Metric cards ── */
     [data-testid="metric-container"] {
-        background: #161b22 !important;
-        border: 1px solid #21262d !important;
+        border: 1px solid rgba(128,128,128,0.2) !important;
         border-radius: 10px !important;
         padding: 14px !important;
     }
-    [data-testid="stMetricLabel"] { color: #8b949e !important; font-size: 11px !important; }
-    [data-testid="stMetricValue"] { color: #e6edf3 !important; font-size: 20px !important; font-weight: 700 !important; }
-    [data-testid="stMetricDelta"] { font-size: 12px !important; }
 
-    /* Dataframe */
-    [data-testid="stDataFrame"] { border: 1px solid #21262d !important; border-radius: 8px !important; }
-
-    /* Buttons */
+    /* ── Buttons ── */
     [data-testid="baseButton-primary"] {
-        background: linear-gradient(135deg, #1c3a5e, #185FA5) !important;
-        border: 1px solid #58a6ff44 !important;
         border-radius: 8px !important;
-        color: #58a6ff !important;
         font-weight: 600 !important;
     }
     [data-testid="baseButton-secondary"] {
-        background: #161b22 !important;
-        border: 1px solid #30363d !important;
         border-radius: 8px !important;
-        color: #8b949e !important;
     }
 
-    /* Selectbox */
+    /* ── Selectbox ── */
     [data-testid="stSelectbox"] > div > div {
-        background: #161b22 !important;
-        border: 1px solid #30363d !important;
         border-radius: 8px !important;
-        color: #e6edf3 !important;
     }
 
-    /* Info / warning boxes */
-    [data-testid="stInfo"] {
-        background: #0d2137 !important;
-        border: 1px solid #1c3a5e !important;
-        border-radius: 8px !important;
-        color: #58a6ff !important;
-    }
-
-    /* Expander */
+    /* ── Expander ── */
     [data-testid="stExpander"] {
-        background: #161b22 !important;
-        border: 1px solid #21262d !important;
         border-radius: 8px !important;
     }
 
-    /* Progress bar */
-    [data-testid="stProgressBar"] > div > div { background: #58a6ff !important; }
+    /* ── Divider ── */
+    hr { opacity: 0.3 !important; }
 
-    /* Divider */
-    hr { border-color: #21262d !important; }
-
-    /* Text */
-    h1,h2,h3,h4 { color: #e6edf3 !important; }
-    p, li, span { color: #c9d1d9; }
+    /* ── Dataframe ── */
+    [data-testid="stDataFrame"] {
+        border-radius: 8px !important;
+        overflow: hidden;
+    }
     </style>""", unsafe_allow_html=True)
 
     st.markdown("""
