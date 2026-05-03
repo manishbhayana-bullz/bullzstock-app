@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-MB Stock Intelligence — v3
-Fixes: theme-aware UI, TradingView embed chart, signal reasoning,
-       polished sidebar, fundamentals fallback, news reference link
+BullzStock Intelligence — v4
+Professional fintech dark theme redesign.
+All signal logic preserved. UI overhauled for portfolio-grade presentation.
 """
 
 import math
@@ -29,7 +29,7 @@ except ImportError:
 
 # ── Page config ───────────────────────────────────────────────
 st.set_page_config(
-    page_title="MB Stock Intelligence",
+    page_title="BullzStock Intelligence",
     page_icon="🐂",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -37,115 +37,112 @@ st.set_page_config(
 
 
 
-# ── Theme-aware CSS (works on both light & dark Streamlit themes) ──
+# ── BullzStock Dark Fintech Theme (locked, not theme-dependent) ──
 st.markdown("""
 <style>
-  /* Metric cards — transparent so they inherit Streamlit's theme */
+  /* ── Force dark background on main app area ── */
+  .stApp, .stApp > div { background-color: #0d1117 !important; }
+  section[data-testid="stSidebar"] { background-color: #010409 !important; border-right: 1px solid #21262d; }
+  section[data-testid="stSidebar"] * { color: #c9d1d9 !important; }
+  .stApp p, .stApp li, .stApp label { color: #c9d1d9 !important; }
+  h1, h2, h3, h4 { color: #e6edf3 !important; }
+
+  /* ── Metric card ── */
   .mb-card {
-    background: var(--background-color, transparent);
-    border: 1px solid var(--secondary-background-color, #e9ecef);
+    background: #161b22;
+    border: 1px solid #21262d;
     border-radius: 10px;
     padding: 14px 16px;
     text-align: center;
   }
+  .mb-card:hover { border-color: #388bfd44; }
   .mb-card-label {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-    font-weight: 600;
+    font-size: 10px;
+    color: #8b949e;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.08em;
     margin-bottom: 4px;
   }
-  .mb-card-value {
-    font-size: 20px;
-    font-weight: 700;
-    margin: 0;
-  }
-  .mb-card-sub {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-    margin-top: 3px;
-  }
-  /* Signal box */
-  .signal-box {
-    border-radius: 12px;
-    padding: 18px 22px;
-    margin-bottom: 1rem;
-  }
-  .vote-item { font-size: 13px; padding: 2px 0; }
-  /* Indicator rows */
-  .ind-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px solid var(--secondary-background-color, #f0f0f0);
-    font-size: 13px;
-  }
-  .ind-label { color: var(--text-color-muted, #6c757d); }
-  /* Sidebar stock card */
-  .sb-stock-card {
-    background: var(--secondary-background-color, #f8f9fa);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin: 6px 0;
-    border-left: 3px solid #1a7340;
-    font-size: 12px;
-  }
-  /* Signal reasoning box */
+  .mb-card-value { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+  .mb-card-sub   { font-size: 11px; color: #8b949e; margin-top: 3px; }
+
+  /* ── Signal box ── */
+  .signal-box { border-radius: 12px; padding: 20px 24px; margin-bottom: 1rem; }
+  .vote-item  { font-size: 12px; padding: 3px 0; color: #c9d1d9; }
+
+  /* ── Reasoning box ── */
   .reasoning-box {
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin: 8px 0;
-    background: var(--secondary-background-color, #f8f9fa);
-    border: 1px solid var(--secondary-background-color, #e9ecef);
-    font-size: 13px;
-    line-height: 1.6;
+    border-radius: 10px; padding: 16px 20px; margin: 8px 0;
+    background: #161b22; border: 1px solid #21262d;
+    font-size: 13px; line-height: 1.7; color: #c9d1d9;
   }
-  /* Visual metric cards — theme-aware dark-style panels */
+
+  /* ── Indicator rows ── */
+  .ind-row {
+    display: flex; justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid #21262d;
+    font-size: 12.5px; color: #c9d1d9;
+  }
+  .ind-label { color: #8b949e; font-size: 12px; }
+
+  /* ── Sidebar stock card ── */
+  .sb-stock-card {
+    background: #161b22; border-radius: 8px;
+    padding: 10px 14px; margin: 8px 0;
+    border-left: 3px solid #238636; font-size: 12px; color: #c9d1d9;
+  }
+
+  /* ── Visual metric cards ── */
   .vm-card {
-    border-radius: 10px;
-    padding: 14px 10px 10px;
+    border-radius: 10px; padding: 14px 10px 10px;
     text-align: center;
-    border: 1px solid var(--secondary-background-color, #e0e0e0);
-    background: var(--secondary-background-color, #f8f9fa);
+    border: 1px solid #21262d; background: #161b22;
   }
-  .vm-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-color-muted, #6c757d);
-    margin-bottom: 6px;
-  }
-  .vm-value {
-    font-size: 22px;
-    font-weight: 700;
-    margin: 4px 0 2px;
-  }
-  .vm-sub {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-  }
+  .vm-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: 0.07em; color: #8b949e; margin-bottom: 6px; }
+  .vm-value { font-size: 22px; font-weight: 800; margin: 4px 0 2px; letter-spacing: -0.01em; }
+  .vm-sub   { font-size: 11px; color: #8b949e; }
+
+  /* ── Disclaimer ── */
   .disclaimer {
-    font-size: 11px;
-    color: var(--text-color-muted, #999);
-    margin-top: 1rem;
-    padding: 10px 14px;
-    background: var(--secondary-background-color, #f8f9fa);
-    border-radius: 8px;
+    font-size: 11px; color: #8b949e; margin-top: 1rem;
+    padding: 10px 16px; background: #161b22;
+    border: 1px solid #21262d; border-radius: 8px;
   }
-  /* Toggle buttons */
+
+  /* ── Streamlit button style override ── */
   div[data-testid="column"] button {
-    border-radius: 20px !important;
-    font-size: 12px !important;
+    border-radius: 20px !important; font-size: 12px !important;
+    background: #21262d !important; border: 1px solid #30363d !important;
+    color: #c9d1d9 !important;
+  }
+  div[data-testid="column"] button:hover {
+    background: #30363d !important; border-color: #58a6ff !important;
+  }
+
+  /* ── Section divider ── */
+  .section-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: #8b949e; padding: 0 0 8px;
+    border-bottom: 1px solid #21262d; margin-bottom: 12px;
+  }
+
+  /* ── Price strip ── */
+  .price-strip {
+    background: #161b22; border: 1px solid #21262d;
+    border-radius: 12px; padding: 16px 24px; margin-bottom: 1.2rem;
+    display: flex; align-items: center;
+    justify-content: space-between; flex-wrap: wrap; gap: 10px;
   }
 </style>
 """, unsafe_allow_html=True)
 
 # ── Config ────────────────────────────────────────────────────
-AV_KEY   = st.secrets.get("AV_KEY", "")
-TG_TOKEN = st.secrets.get("TG_TOKEN", "")
-TG_CHAT  = st.secrets.get("TG_CHAT", "")
+AV_KEY   = ""
+TG_TOKEN = ""
+TG_CHAT  = ""
 
 INDUSTRY_ICONS = {
     "IT": "💻", "Banking": "🏦", "FMCG": "🛒", "Fintech": "💳",
@@ -172,12 +169,12 @@ TIMEFRAMES = {
 }
 
 SIGNAL_CONFIG = {
-    "STRONG BUY":  {"color": "#1a7340", "bg": "#d4edda", "border": "#28a745", "icon": "▲▲"},
-    "BUY":         {"color": "#155724", "bg": "#d4edda", "border": "#5cb85c", "icon": "▲"},
-    "SHORT SELL":  {"color": "#721c24", "bg": "#f8d7da", "border": "#dc3545", "icon": "▼▼"},
-    "SELL":        {"color": "#721c24", "bg": "#f8d7da", "border": "#e06c75", "icon": "▼"},
-    "HOLD":        {"color": "#004085", "bg": "#cce5ff", "border": "#007bff", "icon": "▬"},
-    "WAIT":        {"color": "#856404", "bg": "#fff3cd", "border": "#ffc107", "icon": "◌"},
+    "STRONG BUY":  {"color": "#3fb950", "bg": "#0d2b1a", "border": "#238636", "icon": "▲▲"},
+    "BUY":         {"color": "#56d364", "bg": "#0a2016", "border": "#2ea043", "icon": "▲"},
+    "SHORT SELL":  {"color": "#ff7b72", "bg": "#2d1318", "border": "#da3633", "icon": "▼▼"},
+    "SELL":        {"color": "#ffa198", "bg": "#260e10", "border": "#b91c1c", "icon": "▼"},
+    "HOLD":        {"color": "#58a6ff", "bg": "#0c1f3d", "border": "#1f6feb", "icon": "▬"},
+    "WAIT":        {"color": "#e3b341", "bg": "#2b1d0a", "border": "#9e6a03", "icon": "◌"},
 }
 
 # ── Session state ─────────────────────────────────────────────
@@ -685,30 +682,30 @@ def render_signal_history(ticker):
     for i, h in enumerate(reversed(history)):
         sig = h["signal"]; sc = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
         badge = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
-        chg_c = "#1a7340" if h.get("change_pct", 0) >= 0 else "#721c24"
+        chg_c = "#3fb950" if h.get("change_pct", 0) >= 0 else "#f85149"
         chg_s = "+" if h.get("change_pct", 0) >= 0 else ""
-        bg    = "background:#f8f9fa" if i % 2 == 0 else ""
+        bg    = "background:#161b22" if i % 2 == 0 else "background:#0d1117"
         rows_html += f"""<tr style="{bg}">
-            <td style="padding:6px 10px;font-size:12px">{h['time']}</td>
-            <td style="padding:6px 10px;font-size:12px"><b>{h['tf']}</b></td>
-            <td style="padding:6px 10px;font-size:12px">₹{h['price']:,.2f} <span style="color:{chg_c};font-size:11px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
-            <td style="padding:6px 10px">{badge}</td>
-            <td style="padding:6px 10px;font-size:12px;color:{chg_c}">{h.get('regime','—')}</td>
-            <td style="padding:6px 10px;font-size:12px">₹{h.get('target',0):,.2f}</td>
-            <td style="padding:6px 10px;font-size:12px">₹{h.get('stop',0):,.2f}</td>
-            <td style="padding:6px 10px;font-size:12px">{h.get('prob',0):.0f}%</td>
+            <td style="padding:7px 10px;font-size:12px;color:#8b949e">{h['time']}</td>
+            <td style="padding:7px 10px;font-size:12px;color:#c9d1d9"><b>{h['tf']}</b></td>
+            <td style="padding:7px 10px;font-size:12px;color:#c9d1d9">₹{h['price']:,.2f} <span style="color:{chg_c};font-size:11px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
+            <td style="padding:7px 10px">{badge}</td>
+            <td style="padding:7px 10px;font-size:12px;color:{chg_c}">{h.get('regime','—')}</td>
+            <td style="padding:7px 10px;font-size:12px;color:#c9d1d9">₹{h.get('target',0):,.2f}</td>
+            <td style="padding:7px 10px;font-size:12px;color:#c9d1d9">₹{h.get('stop',0):,.2f}</td>
+            <td style="padding:7px 10px;font-size:12px;color:#c9d1d9">{h.get('prob',0):.0f}%</td>
         </tr>"""
     st.markdown(f"""
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f1f3f5;border-bottom:2px solid #dee2e6">
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Time</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">TF</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Price</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Signal</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Regime</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Target</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Stop</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Prob</th>
+    <table style="width:100%;border-collapse:collapse;font-size:12px;background:#0d1117;border-radius:10px;overflow:hidden;border:1px solid #21262d">
+      <thead><tr style="background:#161b22;border-bottom:1px solid #30363d">
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Time</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">TF</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Price</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Signal</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Regime</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Target</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Stop</th>
+        <th style="padding:8px 10px;text-align:left;font-size:10px;color:#8b949e;text-transform:uppercase;letter-spacing:0.06em">Prob</th>
       </tr></thead>
       <tbody>{rows_html}</tbody>
     </table>""", unsafe_allow_html=True)
@@ -723,12 +720,12 @@ def metric_card(label, value, sub=None, value_color="#212529"):
       {sub_html}
     </div>""", unsafe_allow_html=True)
 
-def indicator_row(label, value, reading="", reading_color="inherit"):
+def indicator_row(label, value, reading="", reading_color="#8b949e"):
     reading_html = f'<span style="color:{reading_color};font-weight:600">{reading}</span>' if reading else ""
     st.markdown(f"""
     <div class="ind-row">
       <span class="ind-label">{label}</span>
-      <span>{value} {reading_html}</span>
+      <span style="color:#c9d1d9">{value} {reading_html}</span>
     </div>""", unsafe_allow_html=True)
 
 # ── TradingView Widget Chart ──────────────────────────────────
@@ -812,12 +809,12 @@ def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, sh
 
 # ── Visual Metrics (theme-aware HTML/SVG) ─────────────────────
 def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
-    rsi_color  = "#dc3545" if (rsi_val or 50) > 70 else "#1a7340" if (rsi_val or 50) < 30 else "#f59e0b"
+    rsi_color  = "#f85149" if (rsi_val or 50) > 70 else "#3fb950" if (rsi_val or 50) < 30 else "#e3b341"
     rsi_label  = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
     rsi_disp   = f"{rsi_val:.1f}" if rsi_val else "—"
-    prob_color = "#1a7340" if prob_val >= 65 else "#f59e0b" if prob_val >= 45 else "#dc3545"
-    rr_color   = "#1a7340" if rr_ratio >= 2 else "#f59e0b" if rr_ratio >= 1 else "#dc3545"
-    pr_color   = "#1a7340" if (period_return or 0) >= 0 else "#dc3545"
+    prob_color = "#3fb950" if prob_val >= 65 else "#e3b341" if prob_val >= 45 else "#f85149"
+    rr_color   = "#3fb950" if rr_ratio >= 2 else "#e3b341" if rr_ratio >= 1 else "#f85149"
+    pr_color   = "#3fb950" if (period_return or 0) >= 0 else "#f85149"
     pr_text    = fmt_pct(period_return) if period_return is not None else "—"
 
     def gauge_arc(val, max_val, color, label, disp, sub):
@@ -833,7 +830,7 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
         <div class="vm-card">
           <div class="vm-label">{label}</div>
           <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:130px">
-            <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="#e9ecef" stroke-width="9" stroke-linecap="round"/>
+            <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="#21262d" stroke-width="9" stroke-linecap="round"/>
             <path d="M10 52 A50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round"/>
             <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
             <circle cx="60" cy="52" r="4" fill="{color}"/>
@@ -855,12 +852,12 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
     <div class="vm-card">
       <div class="vm-label">Risk : Reward</div>
       <svg viewBox="0 0 80 76" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:76px;display:block;margin:0 auto">
-        <circle cx="40" cy="40" r="28" fill="none" stroke="#dc3545" stroke-width="9"
+        <circle cx="40" cy="40" r="28" fill="none" stroke="#f85149" stroke-width="9"
                 stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
-        <circle cx="40" cy="40" r="28" fill="none" stroke="#1a7340" stroke-width="9"
+        <circle cx="40" cy="40" r="28" fill="none" stroke="#3fb950" stroke-width="9"
                 stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 40 40)"/>
         <text x="40" y="37" text-anchor="middle" font-size="8.5" fill="{rr_color}" font-weight="700" font-family="sans-serif">1:{rr_ratio:.1f}</text>
-        <text x="40" y="48" text-anchor="middle" font-size="7" fill="#6c757d" font-family="sans-serif">R:R</text>
+        <text x="40" y="48" text-anchor="middle" font-size="7" fill="#8b949e" font-family="sans-serif">R:R</text>
       </svg>
       <div class="vm-value" style="color:{rr_color};font-size:16px">1 : {rr_ratio:.2f}</div>
       <div class="vm-sub">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
@@ -909,28 +906,22 @@ def render_chart_toggle_bar():
 
 # ── Main App ──────────────────────────────────────────────────
 def main():
-    # ── Polished Sidebar ──────────────────────────────────────
+    # ── Sidebar ────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("""<style>
-        [data-testid="stSidebarNav"] a p,
-        [data-testid="stSidebarNavLink"] span,
-        [data-testid="stSidebarNavItems"] a,
-        nav a span, nav a p {
-        }
-        </style>""", unsafe_allow_html=True)
         st.markdown("""
-        <div style="text-align:center;padding:16px 8px 12px">
-          <div style="font-size:42px;margin-bottom:6px">🐂</div>
-          <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;
-              background:linear-gradient(135deg,#58a6ff,#00ff88);
-              -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
-              MB STOCK INTEL
-          </div>
-          <div style="font-size:11px;color:#6e7681;margin-top:4px;letter-spacing:0.08em;">
-              ENHANCED EDITION · NSE INDIA
+        <div style="padding:20px 8px 16px;border-bottom:1px solid #21262d;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:28px;line-height:1">🐂</div>
+            <div>
+              <div style="font-size:16px;font-weight:800;letter-spacing:0.02em;color:#e6edf3;">
+                BullzStock
+              </div>
+              <div style="font-size:10px;color:#8b949e;letter-spacing:0.08em;text-transform:uppercase;">
+                NSE India · Signal Engine
+              </div>
+            </div>
           </div>
         </div>""", unsafe_allow_html=True)
-        st.markdown("---")
 
         industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
         chosen_ind = st.selectbox(
@@ -961,7 +952,7 @@ def main():
         <div class="sb-stock-card">
           <div style="font-weight:700;font-size:13px">{INDUSTRY_ICONS.get(s['industry'],'📌')} {ticker}</div>
           <div style="font-size:12px;margin-top:2px">{s['fullName']}</div>
-          <div style="font-size:11px;color:#6c757d;margin-top:4px">
+          <div style="font-size:11px;color:#8b949e;margin-top:4px">
             Industry: {s['industry']}<br>
             Timeframe: {TIMEFRAMES[tf_key]['label']}
           </div>
@@ -969,12 +960,12 @@ def main():
 
         st.markdown("---")
         st.markdown("""
-        <div style="font-size:11px;color:#6c757d;line-height:1.7">
-          <b>🕐 NSE Hours</b><br>
+        <div style="font-size:11px;color:#8b949e;line-height:1.7">
+          <b style="color:#c9d1d9">🕐 NSE Hours</b><br>
           Mon–Fri · 9:15 AM – 3:30 PM IST<br><br>
-          <b>📡 Data Sources</b><br>
+          <b style="color:#c9d1d9">📡 Data Sources</b><br>
           Yahoo Finance · Alpha Vantage<br><br>
-          <b>📊 Indicators Used</b><br>
+          <b style="color:#c9d1d9">📊 Indicators Used</b><br>
           RSI · MACD · EMA 50/200<br>
           Bollinger Bands · ATR · Stochastic
         </div>""", unsafe_allow_html=True)
@@ -986,43 +977,56 @@ def main():
 
     # ── Header ────────────────────────────────────────────────
     st.markdown("""
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:0.5rem">
-      <div style="font-size:44px;line-height:1">🐂</div>
+    <div style="display:flex;align-items:center;gap:16px;padding:8px 0 16px;
+                border-bottom:1px solid #21262d;margin-bottom:1.2rem">
+      <div style="font-size:38px;line-height:1">🐂</div>
       <div>
-        <div style="font-size:26px;font-weight:800;line-height:1.1">MB Stock Intelligence</div>
-        <div style="font-size:12px;color:#6c757d">Live NSE · TradingView Charts · Signal Reasoning · Telegram Alerts</div>
+        <div style="font-size:22px;font-weight:800;color:#e6edf3;line-height:1.1;letter-spacing:-0.01em">
+          BullzStock Intelligence
+        </div>
+        <div style="font-size:11px;color:#8b949e;margin-top:3px;letter-spacing:0.02em">
+          NSE India · Rule-Based Signal Engine · ATR Targets · Live Charts
+        </div>
       </div>
-      <div style="margin-left:auto;background:#1a7340;color:white;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">v3 · Enhanced</div>
-    </div>
-    <hr style="margin:0.4rem 0 1rem">""", unsafe_allow_html=True)
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <span style="background:#0d2b1a;color:#3fb950;padding:3px 10px;border-radius:20px;
+                     font-size:10px;font-weight:700;border:1px solid #238636;
+                     text-transform:uppercase;letter-spacing:0.05em">● Live</span>
+        <span style="background:#161b22;color:#8b949e;padding:3px 10px;border-radius:20px;
+                     font-size:10px;border:1px solid #21262d">v4</span>
+      </div>
+    </div>""", unsafe_allow_html=True)
 
     if not analyse:
-        col_l, col_r = st.columns(2)
-        with col_l:
-            st.markdown("""
-            **How to use:**
-            1. Select an industry from the sidebar filter
-            2. Pick a stock and timeframe
-            3. Click **Analyse Now**
-            4. Review signal, reasoning, chart and metrics
-
-            **Signals explained:**
-            - **STRONG BUY / BUY** — Majority of indicators align bullish
-            - **SHORT SELL / SELL** — Majority of indicators align bearish
-            - **HOLD** — Mixed signals, maintain position
-            - **WAIT** — No clear direction, stay out
-            """)
-        with col_r:
-            st.markdown("""
-            **What you get:**
-            - 📈 Live TradingView chart with EMA/BB overlays
-            - 🎯 Entry price, Target and Stop Loss (ATR-based)
-            - 💡 2-line signal reasoning in plain English
-            - 🔗 News reference links for the stock
-            - 📊 Visual metrics — RSI gauge, R:R donut, sparkline
-            - 🕐 Session-based signal history table
-            - 📲 Telegram alert when target is hit
-            """)
+        st.markdown("""
+        <div style="margin-top:2rem;padding:40px 32px;background:#161b22;border:1px solid #21262d;
+                    border-radius:16px;text-align:center">
+          <div style="font-size:48px;margin-bottom:12px">🐂</div>
+          <div style="font-size:20px;font-weight:700;color:#e6edf3;margin-bottom:8px">
+            Select a stock and click Analyse Now
+          </div>
+          <div style="font-size:13px;color:#8b949e;max-width:480px;margin:0 auto;line-height:1.7">
+            BullzStock runs a multi-indicator signal engine across RSI, MACD, EMA 50/200,
+            Bollinger Bands, ATR, and Stochastic to generate entry, stop loss, and target levels.
+          </div>
+          <div style="display:flex;gap:16px;justify-content:center;margin-top:28px;flex-wrap:wrap">
+            <div style="background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
+              <div style="font-size:18px;margin-bottom:6px">🎯</div>
+              <div style="font-size:12px;font-weight:700;color:#e6edf3">ATR-Based Targets</div>
+              <div style="font-size:11px;color:#8b949e;margin-top:3px">Entry · Target · Stop Loss</div>
+            </div>
+            <div style="background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
+              <div style="font-size:18px;margin-bottom:6px">📊</div>
+              <div style="font-size:12px;font-weight:700;color:#e6edf3">6-Indicator Confluence</div>
+              <div style="font-size:11px;color:#8b949e;margin-top:3px">RSI · MACD · EMA · Bollinger</div>
+            </div>
+            <div style="background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
+              <div style="font-size:18px;margin-bottom:6px">📈</div>
+              <div style="font-size:12px;font-weight:700;color:#e6edf3">Live Plotly Charts</div>
+              <div style="font-size:11px;color:#8b949e;margin-top:3px">Candlestick + Volume</div>
+            </div>
+          </div>
+        </div>""", unsafe_allow_html=True)
         return
 
     stock = STOCKS[ticker]
@@ -1058,22 +1062,24 @@ def main():
     })
 
     # ── Live price strip ──────────────────────────────────────
-    chg_color = "#1a7340" if chg_up else "#721c24"
+    chg_color = "#3fb950" if chg_up else "#f85149"
     chg_sym   = "▲" if chg_up else "▼"
+    border_col = "#238636" if chg_up else "#da3633"
     st.markdown(f"""
-    <div style="border-radius:12px;padding:14px 22px;margin-bottom:1rem;
-                border:1px solid {'#c3e6cb' if chg_up else '#f5c6cb'};
-                background:{'#f0fff4' if chg_up else '#fff5f5'};
+    <div style="background:#161b22;border:1px solid {border_col}33;border-left:3px solid {border_col};
+                border-radius:12px;padding:16px 24px;margin-bottom:1.2rem;
                 display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
-        <div style="font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
+        <div style="font-size:11px;color:#8b949e;font-weight:700;text-transform:uppercase;
+                    letter-spacing:0.07em;margin-bottom:4px">
           {INDUSTRY_ICONS.get(stock['industry'],'📌')} {stock['fullName']} · NSE · {tf['label']}
         </div>
-        <div style="font-size:30px;font-weight:800;margin-top:2px">₹{curr:,.2f}
-          <span style="font-size:15px;color:{chg_color};margin-left:8px">{chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <span style="font-size:32px;font-weight:800;color:#e6edf3;letter-spacing:-0.02em">₹{curr:,.2f}</span>
+          <span style="font-size:15px;color:{chg_color};font-weight:600">{chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
         </div>
       </div>
-      <div style="font-size:11px;color:#6c757d;text-align:right">
+      <div style="font-size:11px;color:#8b949e;text-align:right;line-height:1.7">
         <div>{price_data['time']} IST · {price_data['source']}</div>
         <div>Prev close ₹{price_data['prev_close']:,.2f} · {ind['candles']} candles</div>
       </div>
@@ -1082,68 +1088,71 @@ def main():
     # OHLCV
     c1,c2,c3,c4,c5,c6 = st.columns(6)
     with c1: metric_card("Open",     fmt_inr(price_data["open"]))
-    with c2: metric_card("High",     fmt_inr(price_data["high"]),          value_color="#1a7340")
-    with c3: metric_card("Low",      fmt_inr(price_data["low"]),           value_color="#721c24")
+    with c2: metric_card("High",     fmt_inr(price_data["high"]),          value_color="#3fb950")
+    with c3: metric_card("Low",      fmt_inr(price_data["low"]),           value_color="#f85149")
     with c4: metric_card("Volume",   f"{price_data['volume']/1e5:.1f}L")
-    with c5: metric_card("52W High", fmt_inr(price_data.get("52w_high")), value_color="#1a7340")
-    with c6: metric_card("52W Low",  fmt_inr(price_data.get("52w_low")),  value_color="#721c24")
+    with c5: metric_card("52W High", fmt_inr(price_data.get("52w_high")), value_color="#3fb950")
+    with c6: metric_card("52W Low",  fmt_inr(price_data.get("52w_low")),  value_color="#f85149")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Signal Box + Reasoning ────────────────────────────────
     confluence  = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
-    votes_html  = "".join(f'<div class="vote-item" style="color:#495057">• {v}</div>' for v in sig["votes"])
+    votes_html  = "".join(f'<div class="vote-item">· {v}</div>' for v in sig["votes"])
     line1, line2 = build_signal_reasoning(sig, ind, price_data)
     google_link, mc_link = get_news_link(ticker, stock["fullName"])
 
     st.markdown(f"""
-    <div class="signal-box" style="background:{sc['bg']};border:2px solid {sc['border']}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div class="signal-box" style="background:{sc['bg']};border:1px solid {sc['border']}44;border-left:3px solid {sc['border']}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
         <div>
-          <div style="font-size:11px;color:{sc['color']};font-weight:700;text-transform:uppercase;letter-spacing:0.06em">
+          <div style="font-size:10px;color:{sc['color']};font-weight:700;text-transform:uppercase;
+                      letter-spacing:0.1em;margin-bottom:6px">
             Signal · {tf['label']} · {sig['regime']}
           </div>
-          <div style="font-size:26px;font-weight:800;color:{sc['color']};margin-top:4px">{sc['icon']} {signal}</div>
-          <div style="font-size:12px;color:{sc['color']};margin-top:2px">{confluence}</div>
+          <div style="font-size:28px;font-weight:900;color:{sc['color']};line-height:1;letter-spacing:-0.01em">
+            {sc['icon']} {signal}
+          </div>
+          <div style="font-size:12px;color:{sc['color']}99;margin-top:6px;font-weight:600">{confluence}</div>
         </div>
-        <div style="max-width:400px">{votes_html}</div>
+        <div style="max-width:380px">{votes_html}</div>
       </div>
     </div>
     <div class="reasoning-box">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6c757d;letter-spacing:0.05em;margin-bottom:6px">
-        💡 Signal Reasoning
-      </div>
-      <div>📌 {line1}</div>
-      <div style="margin-top:4px">📌 {line2}</div>
-      <div style="margin-top:8px;font-size:12px;color:#6c757d">
-        🔗 News: <a href="{google_link}" target="_blank" style="color:#004085;text-decoration:none">Google News</a>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b949e;
+                  letter-spacing:0.08em;margin-bottom:8px">💡 Signal Reasoning</div>
+      <div style="color:#c9d1d9">📌 {line1}</div>
+      <div style="margin-top:5px;color:#c9d1d9">📌 {line2}</div>
+      <div style="margin-top:10px;font-size:11px;color:#8b949e">
+        🔗 News:
+        <a href="{google_link}" target="_blank" style="color:#58a6ff;text-decoration:none">Google News</a>
         &nbsp;·&nbsp;
-        <a href="{mc_link}" target="_blank" style="color:#004085;text-decoration:none">MoneyControl</a>
+        <a href="{mc_link}" target="_blank" style="color:#58a6ff;text-decoration:none">MoneyControl</a>
         &nbsp;·&nbsp;
-        <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:#004085;text-decoration:none">Economic Times</a>
+        <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:#58a6ff;text-decoration:none">Economic Times</a>
       </div>
     </div>""", unsafe_allow_html=True)
 
     # ── Trade Levels ──────────────────────────────────────────
-    st.markdown("### 🎯 Trade Levels")
+    st.markdown('<div class="section-label">🎯 Trade Levels</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color="#004085")
-    with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color="#1a7340")
-    with c3: metric_card("Stop Loss",     fmt_inr(sig["stop_loss"]),    value_color="#721c24")
+    with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color="#58a6ff")
+    with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color="#3fb950")
+    with c3: metric_card("Stop Loss",     fmt_inr(sig["stop_loss"]),    value_color="#f85149")
     with c4: metric_card("Hold Duration", sig["hold_duration"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Visual Metrics ────────────────────────────────────────
-    st.markdown("### 📊 Visual Metrics")
+    st.markdown('<div class="section-label">📊 Visual Metrics</div>', unsafe_allow_html=True)
     render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
                           price_data["closes"], ind["period_return"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── TradingView Chart ─────────────────────────────────────
-    st.markdown("### 📈 Live Chart")
-    st.caption("Powered by TradingView · Use the toolbar to zoom, draw or add indicators")
+    st.markdown('<div class="section-label">📈 Live Chart</div>', unsafe_allow_html=True)
+    st.caption("Powered by Plotly · Use zoom, pan, and range slider below chart")
     render_chart_toggle_bar()
     render_tradingview_chart(
         stock["tv"], tf["tv_interval"],
@@ -1158,17 +1167,17 @@ def main():
     col_ind, col_fund = st.columns(2)
 
     with col_ind:
-        st.markdown("#### 📐 Technical Indicators")
+        st.markdown('<div class="section-label">📐 Technical Indicators</div>', unsafe_allow_html=True)
         rsi_val  = f"{rsi:.2f}"           if rsi             else "—"
         macd_val = f"{macd['hist']:.4f}"  if macd["hist"]    else "—"
         boll_val = f"{boll['pct']:.1f}%"  if boll["pct"]     else "—"
         sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"] else "—"
         pr       = ind["period_return"]
 
-        rsi_read  = ("Overbought", "#721c24") if rsi and rsi > 70 else ("Oversold", "#1a7340") if rsi and rsi < 30 else ("Neutral", "#495057")
-        macd_read = ("Bullish ▲", "#1a7340") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "#721c24")
-        ema_read  = ("Golden Cross ▲", "#1a7340") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "#721c24") if ema50 and ema200 else ("N/A", "#6c757d")
-        sk_read   = ("Overbought", "#721c24") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "#1a7340") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "#495057")
+        rsi_read  = ("Overbought", "#f85149") if rsi and rsi > 70 else ("Oversold", "#3fb950") if rsi and rsi < 30 else ("Neutral", "#8b949e")
+        macd_read = ("Bullish ▲", "#3fb950") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "#f85149")
+        ema_read  = ("Golden Cross ▲", "#3fb950") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "#f85149") if ema50 and ema200 else ("N/A", "#8b949e")
+        sk_read   = ("Overbought", "#f85149") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "#3fb950") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "#8b949e")
 
         indicator_row("RSI (14)",       rsi_val,  *rsi_read)
         indicator_row("MACD Histogram", macd_val, *macd_read)
@@ -1177,14 +1186,14 @@ def main():
         indicator_row("EMA 200",        fmt_inr(ema200), *ema_read)
         indicator_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility measure")
         indicator_row("Stochastic K",   sk_val, *sk_read)
-        indicator_row("Period Return",  fmt_pct(pr), "▲" if pr and pr >= 0 else "▼", "#1a7340" if pr and pr >= 0 else "#721c24")
+        indicator_row("Period Return",  fmt_pct(pr), "▲" if pr and pr >= 0 else "▼", "#3fb950" if pr and pr >= 0 else "#f85149")
         indicator_row("Volume Trend",   ind["volume_trend"])
         indicator_row("Trend",          ind["trend"])
         indicator_row("Candlestick",    ind["pattern"])
         indicator_row("Candles used",   str(ind["candles"]))
 
     with col_fund:
-        st.markdown("#### 📋 Fundamentals")
+        st.markdown('<div class="section-label">📋 Fundamentals</div>', unsafe_allow_html=True)
         pe  = price_data.get("pe_ratio")
         eps = price_data.get("eps")
         mc  = price_data.get("market_cap")
@@ -1214,33 +1223,20 @@ def main():
         indicator_row("52W Low",        fmt_inr(price_data.get("52w_low")))
         indicator_row("Data Source",    price_data["source"])
 
-        if not any([pe, eps, mc, roe, de]):
-            st.caption("⚠️ Fundamental data unavailable from Yahoo Finance for this stock. "
-                       "This is common for smaller NSE stocks. "
-                       f"[View on MoneyControl]({get_news_link(ticker, stock['fullName'])[1]})")
-
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Signal History ────────────────────────────────────────
-    st.markdown("### 🕐 Signal History")
-    st.caption(f"Session history for **{stock['fullName']}** — last 10 analyses")
+    st.markdown('<div class="section-label">🕐 Signal History · Session</div>', unsafe_allow_html=True)
+    st.caption(f"Last 10 analyses for **{stock['fullName']}** this session")
     render_signal_history(ticker)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Telegram alert ────────────────────────────────────────
-    if curr >= sig["target_price"] * 0.98:
-        msg = (f"🎯 Target Alert — {ticker}\n\nCurrent: {fmt_inr(curr)}\n"
-               f"Target: {fmt_inr(sig['target_price'])}\nSignal: {signal}\n"
-               f"Profit: +{sig['profit_potential']:.1f}%\nProbability: {sig['success_prob']:.0f}%")
-        ok  = send_telegram(msg)
-        st.success("🎯 Target reached! Telegram alert sent.") if ok else st.warning("Target reached but Telegram alert failed.")
-
     # ── Disclaimer ────────────────────────────────────────────
     st.markdown(f"""
     <div class="disclaimer">
-      ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence — <b>not financial advice</b>.
-      Always consult a SEBI-registered investment advisor before investing.
+      ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence —
+      <b>not financial advice</b>. Always consult a SEBI-registered investment advisor before investing.
       NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
     </div>""", unsafe_allow_html=True)
 
