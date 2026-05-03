@@ -711,20 +711,23 @@ def render_signal_history(ticker):
     </table>""", unsafe_allow_html=True)
 
 # ── UI Helpers ────────────────────────────────────────────────
-def metric_card(label, value, sub=None, value_color="#212529"):
-    sub_html = f'<div class="mb-card-sub">{sub}</div>' if sub else ""
+def metric_card(label, value, sub=None, value_color="#e6edf3"):
+    sub_html = f'<div style="font-size:11px;color:#8b949e;margin-top:3px">{sub}</div>' if sub else ""
     st.markdown(f"""
-    <div class="mb-card">
-      <div class="mb-card-label">{label}</div>
-      <div class="mb-card-value" style="color:{value_color}">{value}</div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;
+                padding:14px 16px;text-align:center;margin-bottom:4px">
+      <div style="font-size:10px;color:#8b949e;font-weight:700;text-transform:uppercase;
+                  letter-spacing:0.08em;margin-bottom:6px">{label}</div>
+      <div style="font-size:18px;font-weight:800;color:{value_color};letter-spacing:-0.01em">{value}</div>
       {sub_html}
     </div>""", unsafe_allow_html=True)
 
 def indicator_row(label, value, reading="", reading_color="#8b949e"):
     reading_html = f'<span style="color:{reading_color};font-weight:600">{reading}</span>' if reading else ""
     st.markdown(f"""
-    <div class="ind-row">
-      <span class="ind-label">{label}</span>
+    <div style="display:flex;justify-content:space-between;padding:7px 0;
+                border-bottom:1px solid #21262d;font-size:12.5px">
+      <span style="color:#8b949e;font-size:12px">{label}</span>
       <span style="color:#c9d1d9">{value} {reading_html}</span>
     </div>""", unsafe_allow_html=True)
 
@@ -817,6 +820,10 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
     pr_color   = "#3fb950" if (period_return or 0) >= 0 else "#f85149"
     pr_text    = fmt_pct(period_return) if period_return is not None else "—"
 
+    VM_CARD  = "background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px 10px 12px;text-align:center"
+    VM_LABEL = "font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#8b949e;margin-bottom:6px"
+    VM_SUB   = "font-size:11px;color:#8b949e;margin-top:4px"
+
     def gauge_arc(val, max_val, color, label, disp, sub):
         pct   = min(val / max_val, 1.0)
         angle = pct * 180 - 180
@@ -827,16 +834,16 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
         ey    = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
         large = 1 if pct > 0.5 else 0
         return f"""
-        <div class="vm-card">
-          <div class="vm-label">{label}</div>
+        <div style="{VM_CARD}">
+          <div style="{VM_LABEL}">{label}</div>
           <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:130px">
             <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="#21262d" stroke-width="9" stroke-linecap="round"/>
             <path d="M10 52 A50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round"/>
             <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
             <circle cx="60" cy="52" r="4" fill="{color}"/>
           </svg>
-          <div class="vm-value" style="color:{color}">{disp}</div>
-          <div class="vm-sub">{sub}</div>
+          <div style="font-size:22px;font-weight:800;color:{color};margin:4px 0 2px;letter-spacing:-0.01em">{disp}</div>
+          <div style="{VM_SUB}">{sub}</div>
         </div>"""
 
     rsi_html  = gauge_arc(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_disp, rsi_label)
@@ -849,8 +856,8 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
     rd    = (1 / total) * circ
     rwd   = (max(rr_ratio, 0.01) / total) * circ
     rr_html = f"""
-    <div class="vm-card">
-      <div class="vm-label">Risk : Reward</div>
+    <div style="{VM_CARD}">
+      <div style="{VM_LABEL}">Risk : Reward</div>
       <svg viewBox="0 0 80 76" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:76px;display:block;margin:0 auto">
         <circle cx="40" cy="40" r="28" fill="none" stroke="#f85149" stroke-width="9"
                 stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
@@ -859,8 +866,8 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
         <text x="40" y="37" text-anchor="middle" font-size="8.5" fill="{rr_color}" font-weight="700" font-family="sans-serif">1:{rr_ratio:.1f}</text>
         <text x="40" y="48" text-anchor="middle" font-size="7" fill="#8b949e" font-family="sans-serif">R:R</text>
       </svg>
-      <div class="vm-value" style="color:{rr_color};font-size:16px">1 : {rr_ratio:.2f}</div>
-      <div class="vm-sub">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
+      <div style="font-size:16px;font-weight:800;color:{rr_color};margin:4px 0 2px">1 : {rr_ratio:.2f}</div>
+      <div style="{VM_SUB}">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
     </div>"""
 
     # Sparkline
@@ -875,11 +882,11 @@ def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
         </svg>"""
 
     spark_html = f"""
-    <div class="vm-card">
-      <div class="vm-label">Period Return</div>
+    <div style="{VM_CARD}">
+      <div style="{VM_LABEL}">Period Return</div>
       <div style="padding:4px 6px 0">{spark_svg}</div>
-      <div class="vm-value" style="color:{pr_color}">{pr_text}</div>
-      <div class="vm-sub">{'Positive' if (period_return or 0) >= 0 else 'Negative'} over period</div>
+      <div style="font-size:22px;font-weight:800;color:{pr_color};margin:4px 0 2px">{pr_text}</div>
+      <div style="{VM_SUB}">{'Positive' if (period_return or 0) >= 0 else 'Negative'} over period</div>
     </div>"""
 
     c1, c2, c3, c4 = st.columns(4)
@@ -949,7 +956,8 @@ def main():
         # Selected stock info card
         s = STOCKS[ticker]
         st.markdown(f"""
-        <div class="sb-stock-card">
+        <div style="background:#161b22;border-radius:8px;padding:10px 14px;margin:8px 0;
+                    border-left:3px solid #238636;font-size:12px;color:#c9d1d9">
           <div style="font-weight:700;font-size:13px">{INDUSTRY_ICONS.get(s['industry'],'📌')} {ticker}</div>
           <div style="font-size:12px;margin-top:2px">{s['fullName']}</div>
           <div style="font-size:11px;color:#8b949e;margin-top:4px">
@@ -1098,12 +1106,13 @@ def main():
 
     # ── Signal Box + Reasoning ────────────────────────────────
     confluence  = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
-    votes_html  = "".join(f'<div class="vote-item">· {v}</div>' for v in sig["votes"])
+    votes_html  = "".join(f'<div style="font-size:12px;padding:3px 0;color:#c9d1d9">· {v}</div>' for v in sig["votes"])
     line1, line2 = build_signal_reasoning(sig, ind, price_data)
     google_link, mc_link = get_news_link(ticker, stock["fullName"])
 
     st.markdown(f"""
-    <div class="signal-box" style="background:{sc['bg']};border:1px solid {sc['border']}44;border-left:3px solid {sc['border']}">
+    <div style="border-radius:12px;padding:20px 24px;margin-bottom:1rem;
+                background:{sc['bg']};border:1px solid {sc['border']}66;border-left:4px solid {sc['border']}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
         <div>
           <div style="font-size:10px;color:{sc['color']};font-weight:700;text-transform:uppercase;
@@ -1118,7 +1127,9 @@ def main():
         <div style="max-width:380px">{votes_html}</div>
       </div>
     </div>
-    <div class="reasoning-box">
+    <div style="border-radius:10px;padding:16px 20px;margin:8px 0;
+                background:#161b22;border:1px solid #30363d;
+                font-size:13px;line-height:1.7;color:#c9d1d9">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#8b949e;
                   letter-spacing:0.08em;margin-bottom:8px">💡 Signal Reasoning</div>
       <div style="color:#c9d1d9">📌 {line1}</div>
@@ -1134,7 +1145,7 @@ def main():
     </div>""", unsafe_allow_html=True)
 
     # ── Trade Levels ──────────────────────────────────────────
-    st.markdown('<div class="section-label">🎯 Trade Levels</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">🎯 Trade Levels</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
     with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color="#58a6ff")
     with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color="#3fb950")
@@ -1144,14 +1155,14 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Visual Metrics ────────────────────────────────────────
-    st.markdown('<div class="section-label">📊 Visual Metrics</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">📊 Visual Metrics</div>', unsafe_allow_html=True)
     render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
                           price_data["closes"], ind["period_return"])
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── TradingView Chart ─────────────────────────────────────
-    st.markdown('<div class="section-label">📈 Live Chart</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">📈 Live Chart</div>', unsafe_allow_html=True)
     st.caption("Powered by Plotly · Use zoom, pan, and range slider below chart")
     render_chart_toggle_bar()
     render_tradingview_chart(
@@ -1167,7 +1178,7 @@ def main():
     col_ind, col_fund = st.columns(2)
 
     with col_ind:
-        st.markdown('<div class="section-label">📐 Technical Indicators</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">📐 Technical Indicators</div>', unsafe_allow_html=True)
         rsi_val  = f"{rsi:.2f}"           if rsi             else "—"
         macd_val = f"{macd['hist']:.4f}"  if macd["hist"]    else "—"
         boll_val = f"{boll['pct']:.1f}%"  if boll["pct"]     else "—"
@@ -1193,7 +1204,7 @@ def main():
         indicator_row("Candles used",   str(ind["candles"]))
 
     with col_fund:
-        st.markdown('<div class="section-label">📋 Fundamentals</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">📋 Fundamentals</div>', unsafe_allow_html=True)
         pe  = price_data.get("pe_ratio")
         eps = price_data.get("eps")
         mc  = price_data.get("market_cap")
@@ -1226,7 +1237,7 @@ def main():
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── Signal History ────────────────────────────────────────
-    st.markdown('<div class="section-label">🕐 Signal History · Session</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#8b949e;padding:0 0 8px;border-bottom:1px solid #21262d;margin-bottom:12px">🕐 Signal History · Session</div>', unsafe_allow_html=True)
     st.caption(f"Last 10 analyses for **{stock['fullName']}** this session")
     render_signal_history(ticker)
 
@@ -1234,7 +1245,8 @@ def main():
 
     # ── Disclaimer ────────────────────────────────────────────
     st.markdown(f"""
-    <div class="disclaimer">
+    <div style="font-size:11px;color:#8b949e;margin-top:1rem;padding:10px 16px;
+                background:#161b22;border:1px solid #21262d;border-radius:8px">
       ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence —
       <b>not financial advice</b>. Always consult a SEBI-registered investment advisor before investing.
       NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
