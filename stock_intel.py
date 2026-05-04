@@ -35,11 +35,11 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+# Commented the block of HTML
+# with open("pages/bullzstock_professional_ui.html", "r", encoding="utf-8") as f:
+#     html = f.read()
 
-with open("pages/bullzstock_professional_ui.html", "r", encoding="utf-8") as f:
-    html = f.read()
-
-components.html(html, height=1600, scrolling=True)
+# components.html(html, height=1600, scrolling=True)
 
 # ── BullzStock Dark Fintech Theme (locked, not theme-dependent) ──
 # st.markdown("""
@@ -187,6 +187,7 @@ for key, default in [
     ("chart_show_ema50", True),
     ("chart_show_ema200", True),
     ("chart_show_bb", True),
+    ("selected_theme", "Terminator UI"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -211,6 +212,17 @@ def clean_list(lst):
         except (TypeError, ValueError):
             pass
     return result
+    
+def load_theme_html(theme_name):
+    theme_map = {
+        "Neon UI": "pages/bullzstock_v2.html",
+        "Terminator UI": "pages/bullzstock_professional_ui.html"
+    }
+
+    file_path = theme_map.get(theme_name)
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 # ── Technical Indicators ──────────────────────────────────────
 def calc_rsi(closes, period=14):
@@ -923,6 +935,7 @@ def main():
         <div style="padding:20px 8px 16px;border-bottom:1px solid #21262d;margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:10px">
             <div style="font-size:28px;line-height:1">🐂</div>
+            theme_choice = st.selectbox("🎨 Theme",["Terminator UI", "Neon UI"], index=0 if st.session_state.selected_theme == "Terminator UI" else 1) st.session_state.selected_theme = theme_choice
             <div>
               <div style="font-size:16px;font-weight:800;letter-spacing:0.02em;color:#e6edf3;">
                 BullzStock
@@ -988,6 +1001,7 @@ def main():
             st.success("History cleared")
 
     # ── Header ────────────────────────────────────────────────
+    selected_html = load_theme_html(st.session_state.selected_theme) components.html(selected_html, height=220, scrolling=False)
     st.markdown("""
     <div style="display:flex;align-items:center;gap:16px;padding:8px 0 16px;
                 border-bottom:1px solid #21262d;margin-bottom:1.2rem">
