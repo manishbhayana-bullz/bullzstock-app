@@ -84,25 +84,39 @@ THEMES = {
 }
 
 def inject_theme(theme_name: str):
+    """
+    Inject theme CSS via components.html — the only reliable method in Streamlit.
+    st.markdown with <style> blocks can leak as visible text; components.html never does.
+    Height=0 means no visible iframe, just the injected <style> in the parent document.
+    """
     t = THEMES[theme_name]
-    st.markdown(f"""
-    <link href="{t['font_import']}" rel="stylesheet"/>
-    <style>
+    css = f"""
+      @import url('{t['font_import']}');
+
       /* ── Base ── */
-      html, body, .stApp {{
+      html, body, .stApp,
+      [data-testid="stAppViewContainer"],
+      [data-testid="stAppViewBlockContainer"] {{
         background-color: {t['bg']} !important;
         font-family: {t['font']} !important;
       }}
-      .stApp > div {{ background-color: {t['bg']} !important; }}
+      .stApp > div, .main > div {{
+        background-color: {t['bg']} !important;
+      }}
+      [data-testid="block-container"] {{
+        background-color: {t['bg']} !important;
+      }}
 
       /* ── Sidebar ── */
-      section[data-testid="stSidebar"] {{
+      section[data-testid="stSidebar"],
+      section[data-testid="stSidebar"] > div {{
         background-color: {t['bg1']} !important;
         border-right: 1px solid {t['border2']} !important;
       }}
       section[data-testid="stSidebar"] *,
       section[data-testid="stSidebar"] label,
-      section[data-testid="stSidebar"] p {{
+      section[data-testid="stSidebar"] p,
+      section[data-testid="stSidebar"] span {{
         color: {t['text']} !important;
         font-family: {t['font']} !important;
       }}
@@ -111,13 +125,11 @@ def inject_theme(theme_name: str):
         border: 1px solid {t['border2']} !important;
         color: {t['text']} !important;
       }}
-      section[data-testid="stSidebar"] .stRadio label {{
-        color: {t['muted']} !important;
-      }}
 
-      /* ── Main content ── */
-      .stApp p, .stApp li, .stApp span, .stApp div {{
+      /* ── Main content text ── */
+      .stApp p, .stApp li {{
         font-family: {t['font']} !important;
+        color: {t['text']} !important;
       }}
       h1, h2, h3, h4 {{ color: {t['text']} !important; }}
 
@@ -134,12 +146,12 @@ def inject_theme(theme_name: str):
         text-transform: uppercase !important;
         letter-spacing: 0.08em !important;
       }}
-      div[data-testid="metric-container"] div[data-testid="stMetricValue"] {{
+      div[data-testid="stMetricValue"] {{
         color: {t['text']} !important;
         font-family: 'IBM Plex Mono', monospace !important;
       }}
 
-      /* ── Selectbox / dropdown ── */
+      /* ── Selectbox ── */
       .stSelectbox > div > div {{
         background-color: {t['bg2']} !important;
         border: 1px solid {t['border2']} !important;
@@ -155,11 +167,12 @@ def inject_theme(theme_name: str):
         border-radius: 8px !important;
         font-family: {t['font']} !important;
         font-size: 12px !important;
-        transition: all 0.15s !important;
+        transition: all 0.15s ease !important;
       }}
       .stButton > button:hover {{
         border-color: {t['accent']} !important;
         color: {t['accent']} !important;
+        background: {t['bg3']} !important;
       }}
       .stButton > button[kind="primary"] {{
         background: {t['accent']} !important;
@@ -167,11 +180,13 @@ def inject_theme(theme_name: str):
         border: none !important;
         font-weight: 700 !important;
       }}
-
-      /* ── Radio buttons ── */
-      .stRadio > div {{
-        gap: 4px !important;
+      .stButton > button[kind="primary"]:hover {{
+        opacity: 0.9 !important;
+        color: {t['bg']} !important;
       }}
+
+      /* ── Radio ── */
+      .stRadio > div {{ gap: 4px !important; }}
       .stRadio > div > label {{
         background: {t['bg2']} !important;
         border: 1px solid {t['border']} !important;
@@ -179,47 +194,53 @@ def inject_theme(theme_name: str):
         padding: 4px 12px !important;
         font-size: 12px !important;
         cursor: pointer !important;
+        color: {t['muted']} !important;
       }}
-      .stRadio > div > label[data-selected="true"] {{
+      .stRadio > div > label:has(input:checked) {{
         border-color: {t['accent']} !important;
         color: {t['accent']} !important;
         background: {t['bg3']} !important;
       }}
 
-      /* ── Spinner / info / warning ── */
+      /* ── Alerts / spinners ── */
       .stAlert {{
         background: {t['bg2']} !important;
         border: 1px solid {t['border']} !important;
         color: {t['text']} !important;
         border-radius: 8px !important;
       }}
+      [data-testid="stStatusWidget"] {{ color: {t['muted']} !important; }}
 
       /* ── Dividers ── */
       hr {{ border-color: {t['border']} !important; }}
 
-      /* ── Table ── */
+      /* ── Tables ── */
       .dataframe, table {{
         background: {t['bg2']} !important;
         color: {t['text']} !important;
       }}
 
-      /* ── Plotly chart background ── */
-      .js-plotly-plot .plotly .bg {{
-        fill: {t['bg']} !important;
-      }}
-
-      /* ── Caption / small text ── */
-      .stCaption, small {{
+      /* ── Captions ── */
+      .stCaption, small, [data-testid="stCaptionContainer"] p {{
         color: {t['muted']} !important;
         font-family: {t['font']} !important;
       }}
+
+      /* ── Spinner text ── */
+      [data-testid="stSpinner"] p {{ color: {t['muted']} !important; }}
 
       /* ── Scrollbar ── */
       ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
       ::-webkit-scrollbar-track {{ background: {t['bg1']}; }}
       ::-webkit-scrollbar-thumb {{ background: {t['bg3']}; border-radius: 4px; }}
-    </style>
-    """, unsafe_allow_html=True)
+    """
+    # Use components.html — it writes into a real iframe that injects the
+    # <style> into the parent document via postMessage, bypassing markdown sanitisation.
+    components.html(
+        f"<style>{css}</style>",
+        height=0,
+        scrolling=False,
+    )
 
 # ── Config ────────────────────────────────────────────────────
 AV_KEY   = ""
