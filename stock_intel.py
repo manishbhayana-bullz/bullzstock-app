@@ -1,5 +1,3 @@
-python
-
 #!/usr/bin/env python3
 """
 BullzStock Intelligence — v4.1
