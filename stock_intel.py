@@ -12,6 +12,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 import os
 import tempfile
+from pathlib import Path
 
 os.environ["YFINANCE_CACHE_DIR"] = tempfile.gettempdir()
 
@@ -219,7 +220,8 @@ def load_theme_html(theme_name, stock_data=None, signal_data=None, stock_meta=No
         "Terminator UI": "pages/bullzstock_professional_ui.html"
     }
 
-    file_path = theme_map.get(theme_name)
+    BASE_DIR = Path(__file__).resolve().parent
+    file_path = BASE_DIR / theme_map.get(theme_name)
 
     with open(file_path, "r", encoding="utf-8") as f:
         html = f.read()
