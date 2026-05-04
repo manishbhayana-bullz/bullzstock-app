@@ -184,7 +184,7 @@
     font-size: 11px; padding: 5px 14px; border-radius: 20px;
     font-weight: 700; letter-spacing: 0.06em;
   }
-  .pill-wait {
+  .pill-{{SIGNAL}} {
     background: var(--amber-bg);
     color: var(--amber);
     border: 1px solid rgba(245,166,35,0.3);
@@ -369,8 +369,8 @@
     <div class="sb-item"><div class="sb-dot"></div> Pharma</div>
 
     <div class="sb-stock-block">
-      <div class="sb-stock-name">PFOCUS</div>
-      <div class="sb-stock-meta">Photon Infotech Focus · IT</div>
+      <div class="sb-stock-name">{{TICKER}}</div>
+      <div class="sb-stock-meta">{{FULL_NAME}} · IT</div>
       <div class="sb-tf-row">
         <div class="sb-tf">1D</div>
         <div class="sb-tf">1W</div>
@@ -395,12 +395,12 @@
     <!-- TOPBAR -->
     <div class="topbar">
       <div class="topbar-left">
-        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:3px">Signal · 1 Month · Sideways/Ranging</div>
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:3px">Signal · {{TIMEFRAME}} · Sideways/Ranging</div>
         <div class="topbar-price-block">
-          <div class="topbar-price mono">₹308.15</div>
-          <div class="topbar-chg">▼ ₹6.15 (1.96%)</div>
+          <div class="topbar-price mono">{{PRICE}}</div>
+          <div class="topbar-chg">▼ {{CHANGE}} ({{CHANGE_PCT}})</div>
         </div>
-        <div class="topbar-full">Photon Infotech Focus · NSE · Prev close ₹314.30</div>
+        <div class="topbar-full">{{FULL_NAME}} · NSE · Prev close ₹314.30</div>
       </div>
       <div class="topbar-right">
         <div style="font-size:10px;color:var(--muted)">09:34 IST · Yahoo Finance</div>
@@ -464,10 +464,10 @@
         <div class="signal-card">
           <div class="signal-header">
             <div>
-              <div class="signal-label">Signal · 1 Month</div>
-              <div style="font-size:22px;font-weight:800;margin-top:4px;color:var(--amber)">◌ WAIT</div>
+              <div class="signal-label">Signal · {{TIMEFRAME}}</div>
+              <div style="font-size:22px;font-weight:800;margin-top:4px;color:var(--amber)">◌ {{SIGNAL}}</div>
             </div>
-            <div class="signal-pill pill-wait">8% bearish</div>
+            <div class="signal-pill pill-{{SIGNAL}}">8% bearish</div>
           </div>
 
           <div class="signal-regime">Regime: <span>Sideways / Ranging</span></div>
@@ -475,17 +475,17 @@
           <div class="trade-grid">
             <div class="trade-cell">
               <div class="trade-cell-label">Entry</div>
-              <div class="trade-cell-value c-blue">₹309.95</div>
+              <div class="trade-cell-value c-blue">{{PRICE}}</div>
               <div class="trade-cell-sub" style="color:var(--muted)">Buy zone</div>
             </div>
             <div class="trade-cell">
               <div class="trade-cell-label">Target</div>
-              <div class="trade-cell-value c-green">₹328.04</div>
+              <div class="trade-cell-value c-green">{{TARGET}}</div>
               <div class="trade-cell-sub c-green">+5.8%</div>
             </div>
             <div class="trade-cell">
               <div class="trade-cell-label">Stop Loss</div>
-              <div class="trade-cell-value c-red">₹295.48</div>
+              <div class="trade-cell-value c-red">{{STOPLOSS}}</div>
               <div class="trade-cell-sub c-red">−4.6%</div>
             </div>
             <div class="trade-cell">
@@ -506,14 +506,14 @@
 
           <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;border-left:2px solid var(--amber)">
             📌 Insufficient directional conviction across indicators.<br>
-            📌 Consider waiting for RSI breakout or MACD crossover.
+            📌 Consider {{SIGNAL}}ing for RSI breakout or MACD crossover.
           </div>
         </div>
 
         <!-- Chart placeholder -->
         <div class="chart-area">
           <div class="chart-topbar">
-            <div style="font-size:11px;font-weight:700">PFOCUS</div>
+            <div style="font-size:11px;font-weight:700">{{TICKER}}</div>
             <div class="chart-pill active">EMA 50</div>
             <div class="chart-pill">EMA 200</div>
             <div class="chart-pill">Bollinger</div>
@@ -663,12 +663,12 @@
           <tbody>
             <tr>
               <td style="color:var(--muted)">09:34:02</td>
-              <td>1 Month</td>
-              <td>₹308.15 <span style="color:var(--red);font-size:10px">(−1.96%)</span></td>
-              <td><span class="ind-badge ib-warn" style="font-size:10px">◌ WAIT</span></td>
+              <td>{{TIMEFRAME}}</td>
+              <td>{{PRICE}} <span style="color:var(--red);font-size:10px">(−{{CHANGE_PCT}})</span></td>
+              <td><span class="ind-badge ib-warn" style="font-size:10px">◌ {{SIGNAL}}</span></td>
               <td style="color:var(--muted)">Sideways/Ranging</td>
-              <td class="c-green">₹328.04</td>
-              <td class="c-red">₹295.48</td>
+              <td class="c-green">{{TARGET}}</td>
+              <td class="c-red">{{STOPLOSS}}</td>
               <td>48%</td>
             </tr>
           </tbody>
