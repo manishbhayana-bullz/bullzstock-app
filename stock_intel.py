@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-BullzStock Intelligence — v4.1
-Fixes: sidebar prices, stock card click, TF compact buttons, chart stock bug,
-       fundamentals display, visual metrics sizing, Pro UI, Screener crash,
-       Telegram, ticker strip gap
+BullzStock Intelligence — v4.2
+Fixes v4.1→v4.2: removed stray "python" prefix, screener pages isolation,
+       fundamentals display, visual metrics sizing, Pro UI,
+       Telegram secrets fallback, sidebar button overlap fix
 """
 
 import math
@@ -618,8 +618,12 @@ def fetch_market_data(ticker, tf_key):
 # ══════════════════════════════════════════════════════════════
 def send_telegram(message):
     """Send Telegram alert. Returns (success:bool, error:str)."""
-    token = TG_TOKEN or st.secrets.get("TG_TOKEN", "")
-    chat  = TG_CHAT  or st.secrets.get("TG_CHAT", "")
+    try:
+        token = TG_TOKEN or st.secrets.get("TG_TOKEN", "")
+        chat  = TG_CHAT  or st.secrets.get("TG_CHAT", "")
+    except Exception:
+        token = TG_TOKEN
+        chat  = TG_CHAT
     if not token or not chat:
         return False, "TG_TOKEN or TG_CHAT not configured"
     try:
@@ -701,6 +705,22 @@ def inject_global_css():
     .main .block-container { padding-top: 1rem !important; }
     /* Hide default Streamlit footer */
     footer { display: none !important; }
+    /* Sidebar stock card buttons — invisible but clickable */
+    [data-testid="stSidebar"] .bz-card-wrap + div .stButton > button,
+    [data-testid="stSidebar"] .bz-pick-btn .stButton > button {
+        background: transparent !important;
+        border: none !important;
+        height: 4px !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin-top: -3px !important;
+        margin-bottom: 4px !important;
+        color: transparent !important;
+        font-size: 1px !important;
+        box-shadow: none !important;
+        cursor: pointer !important;
+        overflow: hidden !important;
+    }
     """
 
     if is_neon():
@@ -1003,8 +1023,9 @@ def render_sidebar():
                 pct_str   = "NSE"
                 pct_cls   = "bz-sb-pos" if is_neon() else "bz-sb-pos"
 
-            # Render card HTML + invisible button overlay
+            # Wrap card+button in a container div for CSS targeting
             st.markdown(f"""
+            <div class="bz-pick-btn">
             <div class="bz-sb-card {active_cls}">
               <div>
                 <span class="bz-sb-tk">{tkr}</span>
@@ -1014,11 +1035,11 @@ def render_sidebar():
                 <span class="bz-sb-pr {pct_cls}">{price_str}</span>
                 <span class="bz-sb-pr {pct_cls}" style="font-size:9px">{pct_str}</span>
               </div>
+            </div>
             </div>""", unsafe_allow_html=True)
 
-            # Slim transparent button below card — acts as click target
             if st.button(f"Select {tkr}", key=f"pick_{tkr}", use_container_width=True,
-                         help=f"Analyse {tkr}"):
+                         help=f"Select {tkr} ({info['name']})"):
                 st.session_state.selected_ticker = tkr
                 st.session_state.analyse_clicked  = False
                 st.rerun()
