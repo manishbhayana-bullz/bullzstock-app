@@ -212,6 +212,24 @@ tailwind.config = {
       </div>
       <button class="p-2 text-zinc-400 hover:text-lime-400 hover:bg-white/5 rounded-lg transition-all"><span class="ms">notifications</span></button>
       <button class="p-2 text-zinc-400 hover:text-lime-400 hover:bg-white/5 rounded-lg transition-all"><span class="ms">settings</span></button>
+    <div class="relative">
+  <details>
+    <summary class="cursor-pointer text-xs px-3 py-2 rounded-lg border border-white/10 bg-zinc-900 text-zinc-300">
+      Theme: Neon
+    </summary>
+
+    <div class="absolute right-0 mt-2 bg-zinc-900 border border-white/10 rounded-lg overflow-hidden min-w-[160px] z-50">
+      <div class="px-4 py-2 text-xs text-lime-400">
+        ✓ Neon
+      </div>
+
+      <div onclick="window.location.href='./bullzstock_professional_ui.html'"
+           class="px-4 py-2 text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">
+        Terminator
+      </div>
+    </div>
+  </details>
+</div>
       <div class="flex items-center gap-2 border-l border-white/5 pl-3">
         <div class="text-right">
           <p class="text-xs font-bold text-white">Manish B.</p>
@@ -287,7 +305,6 @@ tailwind.config = {
         <div class="flex gap-3">
           <button class="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-300 font-bold text-xs hover:bg-zinc-800 transition-all">Set Alert</button>
           <button class="px-5 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-black text-xs hover:brightness-110 active:scale-95 transition-all neon-btn-glow">Analyse Now ⚡</button>
-          <button onclick="window.location='bullzstock_professional_ui.html'">⚡ Terminal</button>
         </div>
       </div>
 
