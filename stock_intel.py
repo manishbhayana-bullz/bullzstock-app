@@ -1079,7 +1079,7 @@ def main():
     tf    = TIMEFRAMES[tf_key]
 
     with st.spinner(f"Fetching {tf['label']} data for {stock['fullName']}..."):
-    price_data = fetch_market_data(ticker, tf_key)
+        price_data = fetch_market_data(ticker, tf_key)
 
     if not price_data:
         st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
