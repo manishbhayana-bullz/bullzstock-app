@@ -954,11 +954,18 @@ def render_chart_toggle_bar():
 def main():
     # ── Sidebar ────────────────────────────────────────────────
     with st.sidebar:
+        theme_choice = st.selectbox(
+            "🎨 Theme",
+            ["Terminator UI", "Neon UI"],
+            index=0 if st.session_state.selected_theme == "Terminator UI" else 1
+        )
+
+        st.session_state.selected_theme = theme_choice
+
         st.markdown("""
         <div style="padding:20px 8px 16px;border-bottom:1px solid #21262d;margin-bottom:16px">
           <div style="display:flex;align-items:center;gap:10px">
             <div style="font-size:28px;line-height:1">🐂</div>
-            theme_choice = st.selectbox("🎨 Theme",["Terminator UI", "Neon UI"], index=0 if st.session_state.selected_theme == "Terminator UI" else 1) st.session_state.selected_theme = theme_choice
             <div>
               <div style="font-size:16px;font-weight:800;letter-spacing:0.02em;color:#e6edf3;">
                 BullzStock
