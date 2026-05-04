@@ -1022,7 +1022,6 @@ def main():
             st.success("History cleared")
 
     # ── Header ────────────────────────────────────────────────
-    selected_html = load_theme_html(st.session_state.selected_theme) components.html(selected_html, height=220, scrolling=False)
     st.markdown("""
     <div style="display:flex;align-items:center;gap:16px;padding:8px 0 16px;
                 border-bottom:1px solid #21262d;margin-bottom:1.2rem">
@@ -1095,6 +1094,18 @@ sig = generate_signal(
     price_data["volumes"],
     ind
 )
+selected_html = load_theme_html(
+    st.session_state.selected_theme,
+    stock_data=price_data,
+    signal_data=sig,
+    stock_meta={
+        "ticker": ticker,
+        "fullName": STOCKS[ticker]["fullName"]
+    },
+    timeframe=tf_key
+)
+
+components.html(selected_html, height=900, scrolling=True)
 
 # Render selected HTML theme here
 selected_html = load_theme_html(
