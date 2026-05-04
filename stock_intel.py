@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-BullzStock Intelligence — v5
-Theme-aware Streamlit app. Terminator + Neon UI via CSS injection.
-All signal/data logic preserved. HTML static files removed from runtime.
+BullzStock Intelligence — v4
+Dual-theme UI: Neon Dark (v2) ⟷ Professional (Blue)
+Bloomberg-style sidebar stock cards · Right panel layout · Ticker strip
 """
 
 import math
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from datetime import datetime
 import os
 import tempfile
@@ -36,212 +35,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ══════════════════════════════════════════════════════════════
-#  THEME DEFINITIONS
-#  Each theme is a pure CSS string injected via st.markdown.
-#  No HTML iframes. The Streamlit widgets are the UI.
-# ══════════════════════════════════════════════════════════════
-
-THEMES = {
-    "Terminator UI": {
-        "label": "💻 Terminator",
-        "bg":          "#080c10",
-        "bg1":         "#0d1219",
-        "bg2":         "#111820",
-        "bg3":         "#1a2333",
-        "border":      "rgba(255,255,255,0.07)",
-        "border2":     "rgba(255,255,255,0.12)",
-        "text":        "#e8edf5",
-        "muted":       "#6b7a94",
-        "green":       "#00d084",
-        "red":         "#ff4d6a",
-        "blue":        "#4d9fff",
-        "amber":       "#f5a623",
-        "accent":      "#00d084",
-        "font":        "'IBM Plex Mono', monospace",
-        "font_import": "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap",
-        "sidebar_border": "#00d084",
-    },
-    "Neon UI": {
-        "label": "🌟 Neon",
-        "bg":          "#0a0b0d",
-        "bg1":         "#111315",
-        "bg2":         "#161819",
-        "bg3":         "#1e2022",
-        "border":      "rgba(255,255,255,0.06)",
-        "border2":     "rgba(189,255,0,0.2)",
-        "text":        "#e3e2e2",
-        "muted":       "#8b949e",
-        "green":       "#BDFF00",
-        "red":         "#ff4d6a",
-        "blue":        "#58a6ff",
-        "amber":       "#f5a623",
-        "accent":      "#BDFF00",
-        "font":        "'Manrope', sans-serif",
-        "font_import": "https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
-        "sidebar_border": "#BDFF00",
-    },
-}
-
-def inject_theme(theme_name: str):
-    """
-    Inject theme CSS via components.html — the only reliable method in Streamlit.
-    st.markdown with <style> blocks can leak as visible text; components.html never does.
-    Height=0 means no visible iframe, just the injected <style> in the parent document.
-    """
-    t = THEMES[theme_name]
-    css = f"""
-      @import url('{t['font_import']}');
-
-      /* ── Base ── */
-      html, body, .stApp,
-      [data-testid="stAppViewContainer"],
-      [data-testid="stAppViewBlockContainer"] {{
-        background-color: {t['bg']} !important;
-        font-family: {t['font']} !important;
-      }}
-      .stApp > div, .main > div {{
-        background-color: {t['bg']} !important;
-      }}
-      [data-testid="block-container"] {{
-        background-color: {t['bg']} !important;
-      }}
-
-      /* ── Sidebar ── */
-      section[data-testid="stSidebar"],
-      section[data-testid="stSidebar"] > div {{
-        background-color: {t['bg1']} !important;
-        border-right: 1px solid {t['border2']} !important;
-      }}
-      section[data-testid="stSidebar"] *,
-      section[data-testid="stSidebar"] label,
-      section[data-testid="stSidebar"] p,
-      section[data-testid="stSidebar"] span {{
-        color: {t['text']} !important;
-        font-family: {t['font']} !important;
-      }}
-      section[data-testid="stSidebar"] .stSelectbox > div > div {{
-        background-color: {t['bg2']} !important;
-        border: 1px solid {t['border2']} !important;
-        color: {t['text']} !important;
-      }}
-
-      /* ── Main content text ── */
-      .stApp p, .stApp li {{
-        font-family: {t['font']} !important;
-        color: {t['text']} !important;
-      }}
-      h1, h2, h3, h4 {{ color: {t['text']} !important; }}
-
-      /* ── Metric cards ── */
-      div[data-testid="metric-container"] {{
-        background: {t['bg2']} !important;
-        border: 1px solid {t['border']} !important;
-        border-radius: 10px !important;
-        padding: 12px 16px !important;
-      }}
-      div[data-testid="metric-container"] label {{
-        color: {t['muted']} !important;
-        font-size: 10px !important;
-        text-transform: uppercase !important;
-        letter-spacing: 0.08em !important;
-      }}
-      div[data-testid="stMetricValue"] {{
-        color: {t['text']} !important;
-        font-family: 'IBM Plex Mono', monospace !important;
-      }}
-
-      /* ── Selectbox ── */
-      .stSelectbox > div > div {{
-        background-color: {t['bg2']} !important;
-        border: 1px solid {t['border2']} !important;
-        color: {t['text']} !important;
-        border-radius: 8px !important;
-      }}
-
-      /* ── Buttons ── */
-      .stButton > button {{
-        background: {t['bg2']} !important;
-        color: {t['text']} !important;
-        border: 1px solid {t['border2']} !important;
-        border-radius: 8px !important;
-        font-family: {t['font']} !important;
-        font-size: 12px !important;
-        transition: all 0.15s ease !important;
-      }}
-      .stButton > button:hover {{
-        border-color: {t['accent']} !important;
-        color: {t['accent']} !important;
-        background: {t['bg3']} !important;
-      }}
-      .stButton > button[kind="primary"] {{
-        background: {t['accent']} !important;
-        color: {t['bg']} !important;
-        border: none !important;
-        font-weight: 700 !important;
-      }}
-      .stButton > button[kind="primary"]:hover {{
-        opacity: 0.9 !important;
-        color: {t['bg']} !important;
-      }}
-
-      /* ── Radio ── */
-      .stRadio > div {{ gap: 4px !important; }}
-      .stRadio > div > label {{
-        background: {t['bg2']} !important;
-        border: 1px solid {t['border']} !important;
-        border-radius: 6px !important;
-        padding: 4px 12px !important;
-        font-size: 12px !important;
-        cursor: pointer !important;
-        color: {t['muted']} !important;
-      }}
-      .stRadio > div > label:has(input:checked) {{
-        border-color: {t['accent']} !important;
-        color: {t['accent']} !important;
-        background: {t['bg3']} !important;
-      }}
-
-      /* ── Alerts / spinners ── */
-      .stAlert {{
-        background: {t['bg2']} !important;
-        border: 1px solid {t['border']} !important;
-        color: {t['text']} !important;
-        border-radius: 8px !important;
-      }}
-      [data-testid="stStatusWidget"] {{ color: {t['muted']} !important; }}
-
-      /* ── Dividers ── */
-      hr {{ border-color: {t['border']} !important; }}
-
-      /* ── Tables ── */
-      .dataframe, table {{
-        background: {t['bg2']} !important;
-        color: {t['text']} !important;
-      }}
-
-      /* ── Captions ── */
-      .stCaption, small, [data-testid="stCaptionContainer"] p {{
-        color: {t['muted']} !important;
-        font-family: {t['font']} !important;
-      }}
-
-      /* ── Spinner text ── */
-      [data-testid="stSpinner"] p {{ color: {t['muted']} !important; }}
-
-      /* ── Scrollbar ── */
-      ::-webkit-scrollbar {{ width: 4px; height: 4px; }}
-      ::-webkit-scrollbar-track {{ background: {t['bg1']}; }}
-      ::-webkit-scrollbar-thumb {{ background: {t['bg3']}; border-radius: 4px; }}
-    """
-    # Use components.html — it writes into a real iframe that injects the
-    # <style> into the parent document via postMessage, bypassing markdown sanitisation.
-    components.html(
-        f"<style>{css}</style>",
-        height=0,
-        scrolling=False,
-    )
-
 # ── Config ────────────────────────────────────────────────────
 AV_KEY   = ""
 TG_TOKEN = ""
@@ -261,8 +54,6 @@ STOCKS = {
     "TATAMOTORS": {"name": "Tata Motors",    "industry": "Automobile", "yf": "TATAMOTORS.NS", "av": "TATAMOTORS", "fullName": "Tata Motors Ltd.",        "tv": "NSE:TATAMOTORS"},
     "HAL":        {"name": "HAL",            "industry": "Defence",    "yf": "HAL.NS",        "av": "HAL",        "fullName": "Hindustan Aeronautics",   "tv": "NSE:HAL"},
     "JUBLFOOD":   {"name": "Jubilant Foods", "industry": "Retail/QSR", "yf": "JUBLFOOD.NS",   "av": "JUBLFOOD",   "fullName": "Jubilant Foodworks Ltd.", "tv": "NSE:JUBLFOOD"},
-    "RELIANCE":   {"name": "Reliance",       "industry": "FMCG",       "yf": "RELIANCE.NS",   "av": "RELIANCE",   "fullName": "Reliance Industries",    "tv": "NSE:RELIANCE"},
-    "BAJAJ-AUTO": {"name": "Bajaj Auto",     "industry": "Automobile", "yf": "BAJAJ-AUTO.NS", "av": "BAJAJAUTO",  "fullName": "Bajaj Auto Ltd.",         "tv": "NSE:BAJAJ-AUTO"},
 }
 
 TIMEFRAMES = {
@@ -274,12 +65,12 @@ TIMEFRAMES = {
 }
 
 SIGNAL_CONFIG = {
-    "STRONG BUY":  {"color": "#3fb950", "bg": "#0d2b1a", "border": "#238636", "icon": "▲▲"},
-    "BUY":         {"color": "#56d364", "bg": "#0a2016", "border": "#2ea043", "icon": "▲"},
-    "SHORT SELL":  {"color": "#ff7b72", "bg": "#2d1318", "border": "#da3633", "icon": "▼▼"},
-    "SELL":        {"color": "#ffa198", "bg": "#260e10", "border": "#b91c1c", "icon": "▼"},
-    "HOLD":        {"color": "#58a6ff", "bg": "#0c1f3d", "border": "#1f6feb", "icon": "▬"},
-    "WAIT":        {"color": "#e3b341", "bg": "#2b1d0a", "border": "#9e6a03", "icon": "◌"},
+    "STRONG BUY":  {"color": "#1a7340", "bg": "#d4edda", "border": "#28a745", "icon": "▲▲", "neon_color": "#BDFF00", "neon_bg": "rgba(189,255,0,0.06)", "neon_border": "rgba(189,255,0,0.25)", "pro_color": "#00d084", "pro_bg": "rgba(0,208,132,0.08)", "pro_border": "rgba(0,208,132,0.3)"},
+    "BUY":         {"color": "#155724", "bg": "#d4edda", "border": "#5cb85c", "icon": "▲",  "neon_color": "#BDFF00", "neon_bg": "rgba(189,255,0,0.06)", "neon_border": "rgba(189,255,0,0.25)", "pro_color": "#00d084", "pro_bg": "rgba(0,208,132,0.08)", "pro_border": "rgba(0,208,132,0.3)"},
+    "SHORT SELL":  {"color": "#721c24", "bg": "#f8d7da", "border": "#dc3545", "icon": "▼▼", "neon_color": "#ff4d6a", "neon_bg": "rgba(255,77,106,0.08)", "neon_border": "rgba(255,77,106,0.25)", "pro_color": "#ff4d6a", "pro_bg": "rgba(255,77,106,0.08)", "pro_border": "rgba(255,77,106,0.3)"},
+    "SELL":        {"color": "#721c24", "bg": "#f8d7da", "border": "#e06c75", "icon": "▼",  "neon_color": "#ff4d6a", "neon_bg": "rgba(255,77,106,0.08)", "neon_border": "rgba(255,77,106,0.25)", "pro_color": "#ff4d6a", "pro_bg": "rgba(255,77,106,0.08)", "pro_border": "rgba(255,77,106,0.3)"},
+    "HOLD":        {"color": "#004085", "bg": "#cce5ff", "border": "#007bff", "icon": "▬",  "neon_color": "#4d9fff", "neon_bg": "rgba(77,159,255,0.08)", "neon_border": "rgba(77,159,255,0.25)", "pro_color": "#4d9fff", "pro_bg": "rgba(77,159,255,0.08)", "pro_border": "rgba(77,159,255,0.3)"},
+    "WAIT":        {"color": "#856404", "bg": "#fff3cd", "border": "#ffc107", "icon": "◌",  "neon_color": "#f5a623", "neon_bg": "rgba(245,166,35,0.08)", "neon_border": "rgba(245,166,35,0.25)", "pro_color": "#f5a623", "pro_bg": "rgba(245,166,35,0.08)", "pro_border": "rgba(245,166,35,0.3)"},
 }
 
 # ── Session state ─────────────────────────────────────────────
@@ -288,7 +79,10 @@ for key, default in [
     ("chart_show_ema50", True),
     ("chart_show_ema200", True),
     ("chart_show_bb", True),
-    ("selected_theme", "Terminator UI"),
+    ("selected_ticker", "PFOCUS"),
+    ("selected_tf", "1M"),
+    ("ui_theme", "neon"),   # "neon" | "pro"
+    ("analyse_clicked", False),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -313,6 +107,9 @@ def clean_list(lst):
         except (TypeError, ValueError):
             pass
     return result
+
+def is_neon():
+    return st.session_state.ui_theme == "neon"
 
 # ── Technical Indicators ──────────────────────────────────────
 def calc_rsi(closes, period=14):
@@ -578,14 +375,12 @@ def generate_signal(closes, highs, lows, volumes, ind):
     }
 
 def build_signal_reasoning(sig, ind, price_data):
-    signal  = sig["signal"]
-    rsi     = ind["rsi"]
-    trend   = ind["trend"]
-    votes   = sig["votes"]
-
+    signal   = sig["signal"]
+    rsi      = ind["rsi"]
+    trend    = ind["trend"]
+    votes    = sig["votes"]
     bullish_reasons = [v for v in votes if "Bullish" in v or "Uptrend" in v]
     bearish_reasons = [v for v in votes if "Bearish" in v or "Downtrend" in v]
-
     if signal in ("STRONG BUY", "BUY"):
         top   = bullish_reasons[:2] if bullish_reasons else votes[:2]
         line1 = f"Signal driven by: {top[0].split('(')[0].strip()}" if top else "Multiple bullish indicators aligned."
@@ -596,17 +391,16 @@ def build_signal_reasoning(sig, ind, price_data):
         line2 = f"Also: {top[1].split('(')[0].strip()}." if len(top) > 1 else f"Trend: {trend}."
     elif signal == "HOLD":
         line1 = "Mixed signals — neither clearly bullish nor bearish."
-        line2 = f"Price is ranging. RSI at {rsi:.0f} — neutral zone." if rsi else "Waiting for a clearer trend."
+        line2 = f"Price is ranging. RSI at {rsi:.0f} — neutral zone." if rsi else "Waiting for a clearer trend to emerge."
     else:
         line1 = "Insufficient directional conviction across indicators."
-        line2 = "Consider waiting for RSI breakout above 50 or MACD crossover before entering."
-
+        line2 = "Consider waiting for RSI breakout or a MACD crossover before entering."
     return line1, line2
 
 def get_news_link(ticker_symbol, full_name):
-    encoded      = full_name.replace(" ", "+")
+    encoded = full_name.replace(" ", "+")
     google_news  = f"https://news.google.com/search?q={encoded}+NSE+stock&hl=en-IN&gl=IN"
-    moneycontrol = f"https://www.moneycontrol.com/stocks/cptmarket/compsearchnew.php?search_data={ticker_symbol}&type_search=News&tagnews=y&sel_news=MNC"
+    moneycontrol = f"https://www.moneycontrol.com/stocks/cptmarket/compsearchnew.php?search_data={ticker_symbol}&cid=&mbsearch_str=&type_search=News&news_op=&tagnews=y&sel_news=MNC"
     return google_news, moneycontrol
 
 # ── Data Fetching ─────────────────────────────────────────────
@@ -752,7 +546,6 @@ def fetch_market_data(ticker, tf_key):
         data = fetch_via_alphavantage(stock["av"], tf["av_func"], tf["av_interval"])
     return data
 
-# ── Telegram ──────────────────────────────────────────────────
 def send_telegram(message):
     url = "https://api.telegram.org/bot" + TG_TOKEN + "/sendMessage"
     try:
@@ -761,7 +554,6 @@ def send_telegram(message):
     except:
         return False
 
-# ── Signal History ────────────────────────────────────────────
 def update_signal_history(ticker, rec):
     if ticker not in st.session_state.signal_history:
         st.session_state.signal_history[ticker] = []
@@ -770,228 +562,760 @@ def update_signal_history(ticker, rec):
     else: h.append(rec)
     st.session_state.signal_history[ticker] = h[-10:]
 
-def render_signal_history(ticker):
+# ── TradingView Chart ─────────────────────────────────────────
+def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, show_bb):
+    studies = []
+    if show_ema50:  studies.append('"MAExp@tv-basicstudies"')
+    if show_ema200: studies.append('"MAExp@tv-basicstudies"')
+    if show_bb:     studies.append('"BB@tv-basicstudies"')
+    studies_str = "[" + ",".join(studies) + "]"
+    theme = "dark" if is_neon() else "light"
+    bg    = "#090b0c" if is_neon() else "#f8fafc"
+    widget_html = f"""
+    <div class="tradingview-widget-container" style="height:480px;width:100%">
+      <div id="tradingview_chart" style="height:100%;width:100%"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+      <script type="text/javascript">
+      new TradingView.widget({{
+        "autosize": true,
+        "symbol": "{tv_symbol}",
+        "interval": "{tv_interval}",
+        "timezone": "Asia/Kolkata",
+        "theme": "{theme}",
+        "style": "1",
+        "locale": "en",
+        "toolbar_bg": "{bg}",
+        "enable_publishing": false,
+        "withdateranges": true,
+        "hide_side_toolbar": false,
+        "allow_symbol_change": false,
+        "save_image": false,
+        "studies": {studies_str},
+        "container_id": "tradingview_chart",
+        "hide_top_toolbar": false,
+        "hide_legend": false,
+        "show_popup_button": true,
+        "popup_width": "1000",
+        "popup_height": "650"
+      }});
+      </script>
+    </div>"""
+    st.components.v1.html(widget_html, height=490, scrolling=False)
+
+# ══════════════════════════════════════════════════════════════
+#  THEME CSS INJECTION
+# ══════════════════════════════════════════════════════════════
+def inject_global_css():
+    if is_neon():
+        css = """
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+            background: #0a0b0d !important;
+            color: #e3e2e2 !important;
+        }
+        [data-testid="stSidebar"] {
+            background: #050607 !important;
+            border-right: 1px solid rgba(255,255,255,0.05) !important;
+        }
+        [data-testid="stSidebar"] * { color: #e3e2e2 !important; }
+        [data-testid="stMain"] { background: #0a0b0d !important; }
+        [data-testid="stMainBlockContainer"] { background: #0a0b0d !important; }
+        .stButton > button {
+            background: rgba(189,255,0,0.1) !important;
+            color: #BDFF00 !important;
+            border: 1px solid rgba(189,255,0,0.3) !important;
+            border-radius: 8px !important;
+            font-family: 'Manrope', sans-serif !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.04em !important;
+        }
+        .stButton > button:hover {
+            background: rgba(189,255,0,0.18) !important;
+            border-color: rgba(189,255,0,0.6) !important;
+        }
+        .stButton > button[kind="primary"] {
+            background: #b7f700 !important;
+            color: #141f00 !important;
+            border: none !important;
+            box-shadow: 0 4px 20px rgba(183,247,0,0.25) !important;
+        }
+        .stSelectbox > div > div, .stRadio > div {
+            background: #111315 !important;
+            border-color: rgba(255,255,255,0.08) !important;
+            color: #e3e2e2 !important;
+        }
+        h1,h2,h3,h4,h5 { color: #e3e2e2 !important; font-family: 'Manrope', sans-serif !important; }
+        .stMarkdown p { color: #c9d1d9; }
+        .bz-mono { font-family: 'IBM Plex Mono', monospace; }
+
+        /* Ticker strip */
+        @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        .bz-ticker-strip {
+            background: #050607;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 8px 16px;
+            overflow: hidden;
+            white-space: nowrap;
+            margin-bottom: 16px;
+            border-radius: 0;
+        }
+        .bz-ticker-inner { display: inline-flex; gap: 2.5rem; animation: marquee 28s linear infinite; }
+        .bz-ticker-item { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #8b949e; }
+        .bz-ticker-item .tk  { color: #c9d1d9; }
+        .bz-ticker-item .pos { color: #BDFF00; }
+        .bz-ticker-item .neg { color: #ff4d6a; }
+
+        /* Sidebar stock card */
+        .bz-sb-card {
+            background: #111315;
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 4px 0;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bz-sb-card:hover  { border-color: rgba(189,255,0,0.3); }
+        .bz-sb-card.active { border-color: rgba(189,255,0,0.5); background: rgba(189,255,0,0.03); border-left: 3px solid #BDFF00; }
+        .bz-sb-card .tk  { font-size: 12px; font-weight: 800; color: #e3e2e2; }
+        .bz-sb-card .nm  { font-size: 10px; color: #6b7a94; margin-top: 1px; }
+        .bz-sb-card .pr  { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; text-align: right; }
+        .bz-sb-card .pos { color: #BDFF00; }
+        .bz-sb-card .neg { color: #ff4d6a; }
+
+        /* OHLCV cards */
+        .bz-ohlcv {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 10px 12px;
+            text-align: center;
+        }
+        .bz-ohlcv-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+        .bz-ohlcv-val   { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; }
+
+        /* Signal box */
+        .bz-signal-box  { border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+        .bz-trade-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .bz-trade-cell  { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; }
+        .bz-trade-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+        .bz-trade-val   { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; }
+        .bz-trade-sub   { font-size: 10px; margin-top: 2px; color: #6b7a94; }
+
+        /* Vote rows */
+        .bz-vote-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #6b7a94; padding: 3px 0; }
+        .bz-vote-icon { width: 14px; height: 14px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; }
+
+        /* Ind rows */
+        .bz-ind-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; }
+        .bz-ind-row:last-child { border-bottom: none; }
+        .bz-ind-key { color: #6b7a94; }
+        .bz-ind-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+        .bz-badge-bull { background: rgba(189,255,0,0.1);  color: #BDFF00; }
+        .bz-badge-bear { background: rgba(255,77,106,0.1); color: #ff4d6a; }
+        .bz-badge-neut { background: rgba(255,255,255,0.06); color: #8b949e; }
+        .bz-badge-warn { background: rgba(245,166,35,0.1); color: #f5a623; }
+
+        /* History table */
+        .bz-hist-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .bz-hist-table th { text-align: left; padding: 4px 8px; font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .bz-hist-table td { padding: 7px 8px; border-top: 1px solid rgba(255,255,255,0.04); font-family: 'IBM Plex Mono', monospace; }
+        .bz-hist-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* Metric gauges */
+        .bz-metric-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px 10px 10px; text-align: center; }
+        .bz-metric-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+        .bz-metric-val   { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; margin: 4px 0 2px; }
+        .bz-metric-sub   { font-size: 10px; color: #6b7a94; }
+
+        /* Panel section headers */
+        .bz-panel-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.18em; color: #6b7a94; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+
+        /* Price header */
+        .bz-price-header { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+
+        /* Disclaimer */
+        .bz-disclaimer { font-size: 10px; color: #6b7a94; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; line-height: 1.6; margin-top: 16px; }
+        """
+    else:
+        css = """
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+        html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+            background: #f0f4f8 !important;
+            color: #1a2333 !important;
+        }
+        [data-testid="stSidebar"] {
+            background: #0d1219 !important;
+            border-right: 1px solid rgba(255,255,255,0.07) !important;
+        }
+        [data-testid="stSidebar"] * { color: #e8edf5 !important; }
+        [data-testid="stMain"] { background: #f0f4f8 !important; }
+        [data-testid="stMainBlockContainer"] { background: #f0f4f8 !important; }
+        .stButton > button {
+            background: #ffffff !important;
+            color: #1a2333 !important;
+            border: 1px solid rgba(0,0,0,0.12) !important;
+            border-radius: 8px !important;
+            font-family: 'Syne', sans-serif !important;
+            font-weight: 700 !important;
+        }
+        .stButton > button[kind="primary"] {
+            background: #00d084 !important;
+            color: #fff !important;
+            border: none !important;
+            box-shadow: 0 4px 14px rgba(0,208,132,0.3) !important;
+        }
+        h1,h2,h3,h4,h5 { color: #1a2333 !important; font-family: 'Syne', sans-serif !important; }
+        .bz-mono { font-family: 'IBM Plex Mono', monospace; }
+
+        @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+        .bz-ticker-strip {
+            background: #0d1219;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            padding: 8px 16px;
+            overflow: hidden;
+            white-space: nowrap;
+            margin-bottom: 16px;
+            border-radius: 8px;
+        }
+        .bz-ticker-inner { display: inline-flex; gap: 2.5rem; animation: marquee 28s linear infinite; }
+        .bz-ticker-item { font-size: 11px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #6b7a94; }
+        .bz-ticker-item .tk  { color: #e8edf5; }
+        .bz-ticker-item .pos { color: #00d084; }
+        .bz-ticker-item .neg { color: #ff4d6a; }
+
+        .bz-sb-card {
+            background: #111820;
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 4px 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bz-sb-card.active { border-color: rgba(0,208,132,0.5); background: rgba(0,208,132,0.05); border-left: 3px solid #00d084; }
+        .bz-sb-card .tk  { font-size: 12px; font-weight: 800; color: #e8edf5; }
+        .bz-sb-card .nm  { font-size: 10px; color: #6b7a94; margin-top: 1px; }
+        .bz-sb-card .pr  { font-family: 'IBM Plex Mono', monospace; font-size: 11px; font-weight: 600; text-align: right; }
+        .bz-sb-card .pos { color: #00d084; }
+        .bz-sb-card .neg { color: #ff4d6a; }
+
+        .bz-ohlcv { background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 8px; padding: 10px 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+        .bz-ohlcv-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
+        .bz-ohlcv-val   { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #1a2333; }
+
+        .bz-signal-box  { border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; }
+        .bz-trade-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+        .bz-trade-cell  { background: #f8fafc; border: 1px solid rgba(0,0,0,0.07); border-radius: 8px; padding: 10px 12px; }
+        .bz-trade-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+        .bz-trade-val   { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; color: #1a2333; }
+        .bz-trade-sub   { font-size: 10px; margin-top: 2px; color: #6b7a94; }
+
+        .bz-vote-row  { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #6b7a94; padding: 3px 0; }
+        .bz-vote-icon { width: 14px; height: 14px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; }
+
+        .bz-ind-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 11px; }
+        .bz-ind-row:last-child { border-bottom: none; }
+        .bz-ind-key { color: #6b7a94; }
+        .bz-ind-badge { font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: 600; }
+        .bz-badge-bull { background: rgba(0,208,132,0.1);  color: #00a86b; }
+        .bz-badge-bear { background: rgba(255,77,106,0.1); color: #ff4d6a; }
+        .bz-badge-neut { background: rgba(0,0,0,0.06); color: #6b7a94; }
+        .bz-badge-warn { background: rgba(245,166,35,0.1); color: #c47d00; }
+
+        .bz-hist-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .bz-hist-table th { text-align: left; padding: 4px 8px; font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.08); }
+        .bz-hist-table td { padding: 7px 8px; border-top: 1px solid rgba(0,0,0,0.05); font-family: 'IBM Plex Mono', monospace; color: #1a2333; }
+        .bz-hist-table tr:hover td { background: rgba(0,0,0,0.02); }
+
+        .bz-metric-card { background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 10px; padding: 14px 10px 10px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .bz-metric-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+        .bz-metric-val   { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; margin: 4px 0 2px; }
+        .bz-metric-sub   { font-size: 10px; color: #6b7a94; }
+
+        .bz-panel-title { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.18em; color: #6b7a94; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+
+        .bz-price-header { background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+        .bz-disclaimer { font-size: 10px; color: #6b7a94; padding: 10px 14px; background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 8px; line-height: 1.6; margin-top: 16px; }
+        """
+
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  SIDEBAR
+# ══════════════════════════════════════════════════════════════
+def render_sidebar():
+    with st.sidebar:
+        # ── Logo ─────────────────────────────────────────────
+        accent = "#BDFF00" if is_neon() else "#00d084"
+        logo_bg = "#b7f700" if is_neon() else "#00d084"
+        st.markdown(f"""
+        <div style="padding:16px 8px 12px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:34px;height:34px;background:{logo_bg};border-radius:8px;
+                        display:flex;align-items:center;justify-content:center;font-size:18px">🐂</div>
+            <div>
+              <div style="font-size:15px;font-weight:800;color:{accent};letter-spacing:0.01em">BullzStock</div>
+              <div style="font-size:9px;color:#6b7a94;letter-spacing:0.15em;text-transform:uppercase;margin-top:1px">NSE India · Signal Engine</div>
+            </div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # ── UI Theme toggle ───────────────────────────────────
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#6b7a94;margin-bottom:6px;padding:0 2px">UI Theme</div>', unsafe_allow_html=True)
+        col_n, col_p = st.columns(2)
+        with col_n:
+            neon_active = "background:rgba(189,255,0,0.15);color:#BDFF00;border:1px solid rgba(189,255,0,0.4);" if is_neon() else ""
+            if st.button("⚡ Neon", key="btn_theme_neon", use_container_width=True):
+                st.session_state.ui_theme = "neon"; st.rerun()
+        with col_p:
+            pro_active = "background:rgba(0,208,132,0.15);color:#00d084;border:1px solid rgba(0,208,132,0.4);" if not is_neon() else ""
+            if st.button("🔷 Pro", key="btn_theme_pro", use_container_width=True):
+                st.session_state.ui_theme = "pro"; st.rerun()
+
+        st.markdown("<hr style='border:none;border-top:1px solid rgba(255,255,255,0.07);margin:12px 0'>", unsafe_allow_html=True)
+
+        # ── Industry filter ───────────────────────────────────
+        industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
+        chosen_ind = st.selectbox(
+            "🏭 Industry",
+            industries,
+            format_func=lambda x: f"{INDUSTRY_ICONS.get(x,'📌')} {x}"
+        )
+        filtered = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
+
+        # ── Bloomberg-style clickable stock cards ─────────────
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#6b7a94;margin:10px 0 6px;padding:0 2px">Select Stock</div>', unsafe_allow_html=True)
+
+        for tkr, info in filtered.items():
+            is_active = st.session_state.selected_ticker == tkr
+            active_cls = "active" if is_active else ""
+            # Use a button-based card (Streamlit native) overlaid with styled HTML
+            col_card, col_btn = st.columns([5, 1])
+            with col_card:
+                pct_placeholder = "+0.00%" # Live pct would need fetch; show placeholder
+                pos_neg = "pos" if True else "neg"
+                st.markdown(f"""
+                <div class="bz-sb-card {active_cls}">
+                  <div>
+                    <div class="tk">{tkr}</div>
+                    <div class="nm">{info['name']}</div>
+                  </div>
+                  <div class="pr">
+                    <div class="{pos_neg}">NSE</div>
+                    <div style="font-size:9px;color:#6b7a94">{info['industry']}</div>
+                  </div>
+                </div>""", unsafe_allow_html=True)
+            with col_btn:
+                if st.button("→", key=f"pick_{tkr}", help=f"Select {tkr}"):
+                    st.session_state.selected_ticker = tkr
+                    st.session_state.analyse_clicked  = False
+                    st.rerun()
+
+        # ── Timeframe ─────────────────────────────────────────
+        st.markdown("<hr style='border:none;border-top:1px solid rgba(255,255,255,0.07);margin:12px 0'>", unsafe_allow_html=True)
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#6b7a94;margin-bottom:8px">Timeframe</div>', unsafe_allow_html=True)
+
+        tf_cols = st.columns(len(TIMEFRAMES))
+        for i, (tf_key, tf_val) in enumerate(TIMEFRAMES.items()):
+            with tf_cols[i]:
+                is_tf_active = st.session_state.selected_tf == tf_key
+                if st.button(tf_key, key=f"tf_{tf_key}", use_container_width=True,
+                             type="primary" if is_tf_active else "secondary"):
+                    st.session_state.selected_tf = tf_key
+                    st.rerun()
+
+        # ── Analyse button ────────────────────────────────────
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⚡  Analyse Now", use_container_width=True, type="primary", key="analyse_btn"):
+            st.session_state.analyse_clicked = True
+            st.rerun()
+
+        # ── Selected stock info block ─────────────────────────
+        s = STOCKS[st.session_state.selected_ticker]
+        st.markdown(f"""
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+                    border-radius:10px;padding:12px;margin-top:8px">
+          <div style="font-size:12px;font-weight:800;color:{accent}">{INDUSTRY_ICONS.get(s['industry'],'📌')} {st.session_state.selected_ticker}</div>
+          <div style="font-size:11px;margin-top:2px;color:#c9d1d9">{s['fullName']}</div>
+          <div style="font-size:10px;color:#6b7a94;margin-top:6px;line-height:1.7">
+            {s['industry']} · {TIMEFRAMES[st.session_state.selected_tf]['label']}
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # ── Footer info ───────────────────────────────────────
+        st.markdown("<hr style='border:none;border-top:1px solid rgba(255,255,255,0.07);margin:16px 0 8px'>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="font-size:10px;color:#6b7a94;line-height:1.8;padding:0 2px">
+          <b style="color:#c9d1d9">NSE Hours</b><br>Mon–Fri · 9:15 AM – 3:30 PM IST<br>
+          <b style="color:#c9d1d9">Indicators</b><br>RSI · MACD · EMA · BB · ATR · Stoch
+        </div>""", unsafe_allow_html=True)
+
+        if st.button("🗑️ Clear History", use_container_width=True, key="clear_hist"):
+            st.session_state.signal_history = {}
+            st.success("History cleared")
+
+# ══════════════════════════════════════════════════════════════
+#  TICKER STRIP
+# ══════════════════════════════════════════════════════════════
+def render_ticker_strip():
+    items = [
+        ("NIFTY 50", "22,456", "+0.84%", True),
+        ("SENSEX",   "73,852", "+0.76%", True),
+        ("BANKNIFTY","48,210", "−0.22%", False),
+        ("BAJAJ-AUTO","9,994", "+4.60%", True),
+        ("RELIANCE",  "1,430", "+6.50%", True),
+        ("HDFCBANK",  "1,680", "+2.10%", True),
+        ("PFOCUS",    "308.15","−1.96%", False),
+        ("USDINR",    "83.42", "+0.01%", True),
+        ("ITC",       "450.20","+1.22%", True),
+        ("TATAMOTORS","910.55","−0.35%", False),
+    ]
+    def item_html(tkr, price, pct, up):
+        cls = "pos" if up else "neg"
+        return f'<span class="bz-ticker-item"><span class="tk">{tkr}</span> <span class="{cls}">{price}</span> <span class="{cls}">{pct}</span></span>'
+
+    items_html = "".join(item_html(*i) for i in items)
+    # Duplicate for seamless loop
+    st.markdown(f"""
+    <div class="bz-ticker-strip">
+      <div class="bz-ticker-inner">
+        <div style="display:inline-flex;gap:2.5rem">{items_html}</div>
+        <div style="display:inline-flex;gap:2.5rem;margin-left:2.5rem">{items_html}</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  SIGNAL COLOR HELPERS
+# ══════════════════════════════════════════════════════════════
+def sig_color(sc):
+    return sc["neon_color"] if is_neon() else sc["pro_color"]
+
+def sig_bg(sc):
+    return sc["neon_bg"] if is_neon() else sc["pro_bg"]
+
+def sig_border(sc):
+    return sc["neon_border"] if is_neon() else sc["pro_border"]
+
+def badge_cls(reading):
+    r = reading.lower()
+    if any(x in r for x in ["bullish", "uptrend", "golden", "oversold", "above"]): return "bz-badge-bull"
+    if any(x in r for x in ["bearish", "downtrend", "death", "overbought", "below"]): return "bz-badge-bear"
+    if any(x in r for x in ["warn", "near lower", "near upper", "moderate"]): return "bz-badge-warn"
+    return "bz-badge-neut"
+
+# ══════════════════════════════════════════════════════════════
+#  OHLCV BAR
+# ══════════════════════════════════════════════════════════════
+def render_ohlcv(price_data):
+    acc_g = "#BDFF00" if is_neon() else "#00d084"
+    def card(label, val, color=None):
+        col = f"color:{color};" if color else ""
+        return f'<div class="bz-ohlcv"><div class="bz-ohlcv-label">{label}</div><div class="bz-ohlcv-val" style="{col}">{val}</div></div>'
+
+    cols = st.columns(6)
+    cells = [
+        ("Open",     fmt_inr(price_data["open"]),              None),
+        ("High",     fmt_inr(price_data["high"]),              acc_g),
+        ("Low",      fmt_inr(price_data["low"]),               "#ff4d6a"),
+        ("Volume",   f"{price_data['volume']/1e5:.1f}L",       None),
+        ("52W High", fmt_inr(price_data.get("52w_high")),      acc_g),
+        ("52W Low",  fmt_inr(price_data.get("52w_low")),       "#ff4d6a"),
+    ]
+    for i, (label, val, color) in enumerate(cells):
+        with cols[i]:
+            st.markdown(card(label, val, color), unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  RIGHT PANEL — Signal + Metrics + Indicators
+# ══════════════════════════════════════════════════════════════
+def render_right_panel(sig, ind, price_data, stock, tf, ticker):
+    sc      = SIGNAL_CONFIG.get(sig["signal"], SIGNAL_CONFIG["WAIT"])
+    signal  = sig["signal"]
+    rsi     = ind["rsi"]
+    macd    = ind["macd"]
+    boll    = ind["bollinger"]
+    ema50   = ind["ema50"]
+    ema200  = ind["ema200"]
+    curr    = price_data["current_price"]
+    line1, line2 = build_signal_reasoning(sig, ind, price_data)
+
+    sc_color  = sig_color(sc)
+    sc_bg     = sig_bg(sc)
+    sc_border = sig_border(sc)
+    acc_g     = "#BDFF00" if is_neon() else "#00d084"
+
+    # ── Signal box ────────────────────────────────────────────
+    confluence = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'}"
+    st.markdown(f'<div class="bz-panel-title">Signal Analysis</div>', unsafe_allow_html=True)
+
+    # Intensity bar
+    score_norm = (sig["pct_bull"] + 100) / 200  # 0→1 where 0.5=neutral
+    intensity_segs = []
+    for i, thresh in enumerate([0.25, 0.4, 0.6, 0.75, 1.0]):
+        filled = score_norm >= thresh
+        if filled:
+            c = "#BDFF00" if is_neon() else "#00d084" if score_norm > 0.6 else "#ff4d6a"
+        else:
+            c = "rgba(255,255,255,0.08)" if is_neon() else "rgba(0,0,0,0.08)"
+        intensity_segs.append(f'<div style="height:5px;flex:1;background:{c};border-radius:3px"></div>')
+
+    st.markdown(f"""
+    <div class="bz-signal-box" style="background:{sc_bg};border:1px solid {sc_border}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div>
+          <div style="font-size:9px;color:{sc_color};text-transform:uppercase;letter-spacing:0.12em;font-weight:700;margin-bottom:4px">
+            Signal · {tf['label']}
+          </div>
+          <div style="font-size:22px;font-weight:800;color:{sc_color};letter-spacing:0.02em">{sc['icon']} {signal}</div>
+        </div>
+        <div style="font-size:10px;font-weight:700;padding:5px 12px;border-radius:20px;
+                    background:{sc_bg};color:{sc_color};border:1px solid {sc_border}">
+          {confluence}
+        </div>
+      </div>
+      <div style="font-size:11px;color:{'#8b949e' if is_neon() else '#6b7a94'};
+                  padding:8px 0;border-top:1px solid rgba(255,255,255,0.06) if is_neon() else rgba(0,0,0,0.07)">
+        Regime: <span style="color:{sc_color};font-weight:600">{sig['regime']}</span>
+      </div>
+    </div>
+
+    <div class="bz-trade-grid">
+      <div class="bz-trade-cell">
+        <div class="bz-trade-label">Entry</div>
+        <div class="bz-trade-val" style="color:{'#4d9fff' if is_neon() else '#2563eb'}">{fmt_inr(sig['buy_price'])}</div>
+        <div class="bz-trade-sub">Buy zone</div>
+      </div>
+      <div class="bz-trade-cell">
+        <div class="bz-trade-label">Target</div>
+        <div class="bz-trade-val" style="color:{acc_g}">{fmt_inr(sig['target_price'])}</div>
+        <div class="bz-trade-sub" style="color:{acc_g}">+{sig['profit_potential']:.1f}%</div>
+      </div>
+      <div class="bz-trade-cell">
+        <div class="bz-trade-label">Stop Loss</div>
+        <div class="bz-trade-val" style="color:#ff4d6a">{fmt_inr(sig['stop_loss'])}</div>
+        <div class="bz-trade-sub" style="color:#ff4d6a">R:R {sig['rr_ratio']:.2f}x</div>
+      </div>
+      <div class="bz-trade-cell">
+        <div class="bz-trade-label">Hold</div>
+        <div class="bz-trade-val" style="font-size:12px">{sig['hold_duration']}</div>
+        <div class="bz-trade-sub">Short term</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:12px">
+      <div style="font-size:9px;color:{'#6b7a94'};text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;font-weight:700">Indicator Votes</div>
+      {''.join(f"""<div class="bz-vote-row">
+        <div class="bz-vote-icon" style="background:{'rgba(189,255,0,0.1)' if is_neon() else 'rgba(0,208,132,0.1)'};color:{acc_g}">▲</div>
+        <span style="font-size:11px;color:{'#8b949e' if is_neon() else '#6b7a94'}">{v}</span>
+      </div>""" if any(x in v for x in ["Bullish","Uptrend","confirm","Golden","above"]) else f"""<div class="bz-vote-row">
+        <div class="bz-vote-icon" style="background:rgba(255,77,106,0.1);color:#ff4d6a">▼</div>
+        <span style="font-size:11px;color:{'#8b949e' if is_neon() else '#6b7a94'}">{v}</span>
+      </div>""" for v in sig['votes'][:5])}
+    </div>
+
+    <div style="background:{'rgba(255,255,255,0.03)' if is_neon() else '#f8fafc'};border-radius:8px;
+                padding:10px 12px;font-size:11px;color:{'#8b949e' if is_neon() else '#6b7a94'};
+                line-height:1.7;border-left:2px solid {sc_color};margin-bottom:12px">
+      📌 {line1}<br>📌 {line2}
+    </div>
+
+    <div style="background:{'rgba(255,255,255,0.03)' if is_neon() else '#f8fafc'};
+                border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px">
+      <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;
+                  text-transform:uppercase;color:{'#6b7a94'};margin-bottom:8px">
+        <span>Signal Intensity</span>
+        <span style="color:{sc_color}">{signal}</span>
+      </div>
+      <div style="display:flex;gap:4px">{''.join(intensity_segs)}</div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#6b7a94;margin-top:6px">
+        <span>Strong Buy</span><span>Strong Sell</span>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Visual Metrics ────────────────────────────────────────
+    st.markdown('<div class="bz-panel-title">Visual Metrics</div>', unsafe_allow_html=True)
+    _render_metric_gauges(rsi, sig["success_prob"], sig["rr_ratio"], price_data["closes"], ind["period_return"])
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── Technical Indicators ──────────────────────────────────
+    st.markdown('<div class="bz-panel-title">📐 Technical Indicators</div>', unsafe_allow_html=True)
+    rsi_val  = f"{rsi:.2f}"          if rsi            else "—"
+    macd_val = f"{macd['hist']:.4f}" if macd["hist"]   else "—"
+    boll_val = f"{boll['pct']:.1f}%" if boll["pct"]    else "—"
+    sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"] else "—"
+
+    rsi_read  = ("Overbought", "bz-badge-bear") if rsi and rsi > 70 else ("Oversold", "bz-badge-bull") if rsi and rsi < 30 else ("Neutral", "bz-badge-neut")
+    macd_read = ("Bullish ▲", "bz-badge-bull") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "bz-badge-bear")
+    ema_read  = ("Golden Cross ▲", "bz-badge-bull") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "bz-badge-bear") if ema50 and ema200 else ("N/A", "bz-badge-neut")
+    sk_read   = ("Overbought", "bz-badge-bear") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "bz-badge-bull") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "bz-badge-neut")
+
+    def ind_row(label, val, badge_text="", badge_class=""):
+        badge = f'<span class="bz-ind-badge {badge_class}">{badge_text}</span>' if badge_text else ""
+        return f'<div class="bz-ind-row"><span class="bz-ind-key">{label}</span><span class="bz-mono">{val}{badge}</span></div>'
+
+    st.markdown(f"""
+    {ind_row("RSI (14)",       rsi_val,          *rsi_read)}
+    {ind_row("MACD Histogram", macd_val,         *macd_read)}
+    {ind_row("Bollinger %B",   boll_val,         boll["position"], badge_cls(boll["position"]))}
+    {ind_row("EMA 50",         fmt_inr(ema50),   f"{'Above' if ema50 and curr > ema50 else 'Below'} EMA50", "bz-badge-bull" if ema50 and curr > ema50 else "bz-badge-bear")}
+    {ind_row("EMA 200",        fmt_inr(ema200),  *ema_read)}
+    {ind_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility", "bz-badge-neut")}
+    {ind_row("Stochastic K",   sk_val,           *sk_read)}
+    {ind_row("Volume Trend",   ind["volume_trend"])}
+    {ind_row("Trend",          ind["trend"])}
+    {ind_row("Candlestick",    ind["pattern"])}
+    {ind_row("Candles used",   str(ind["candles"]))}
+    """, unsafe_allow_html=True)
+
+    # ── News links ────────────────────────────────────────────
+    st.markdown("<br>", unsafe_allow_html=True)
+    google_link, mc_link = get_news_link(ticker, stock["fullName"])
+    link_c = "#4d9fff" if is_neon() else "#2563eb"
+    st.markdown(f"""
+    <div style="font-size:10px;color:#6b7a94;line-height:2">
+      🔗 <a href="{google_link}" target="_blank" style="color:{link_c};text-decoration:none">Google News</a>
+      · <a href="{mc_link}" target="_blank" style="color:{link_c};text-decoration:none">MoneyControl</a>
+      · <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:{link_c};text-decoration:none">ET Markets</a>
+    </div>""", unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  METRIC GAUGES
+# ══════════════════════════════════════════════════════════════
+def _render_metric_gauges(rsi_val, prob_val, rr_ratio, closes, period_return):
+    acc_g = "#BDFF00" if is_neon() else "#00d084"
+    track = "#1e2022" if is_neon() else "#e8eef4"
+
+    rsi_color  = "#ff4d6a" if (rsi_val or 50) > 70 else acc_g if (rsi_val or 50) < 30 else "#f5a623"
+    rsi_label  = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
+    rsi_disp   = f"{rsi_val:.1f}" if rsi_val else "—"
+    prob_color = acc_g if prob_val >= 65 else "#f5a623" if prob_val >= 45 else "#ff4d6a"
+    rr_color   = acc_g if rr_ratio >= 2 else "#f5a623" if rr_ratio >= 1 else "#ff4d6a"
+    pr_color   = acc_g if (period_return or 0) >= 0 else "#ff4d6a"
+    pr_text    = fmt_pct(period_return) if period_return is not None else "—"
+
+    def gauge_svg(val, max_val, color, disp, sub):
+        pct = min(val / max_val, 1.0)
+        angle = pct * 180 - 180
+        rad = math.radians(angle)
+        nx = 50 + 36 * math.cos(rad)
+        ny = 46 + 36 * math.sin(rad)
+        ex = 50 + 44 * math.cos(math.radians(pct * 180 - 180))
+        ey = 46 + 44 * math.sin(math.radians(pct * 180 - 180))
+        large = 1 if pct > 0.5 else 0
+        return f"""
+        <div class="bz-metric-card">
+          <svg viewBox="0 0 100 52" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:110px;display:block;margin:0 auto 4px">
+            <path d="M8 46 A42 42 0 0 1 92 46" fill="none" stroke="{track}" stroke-width="8" stroke-linecap="round"/>
+            <path d="M8 46 A42 42 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="8" stroke-linecap="round"/>
+            <line x1="50" y1="46" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="50" cy="46" r="3.5" fill="{color}"/>
+          </svg>
+          <div class="bz-metric-val" style="color:{color}">{disp}</div>
+          <div class="bz-metric-sub">{sub}</div>
+        </div>"""
+
+    # RSI gauge
+    rsi_html  = gauge_svg(rsi_val or 50, 100, rsi_color, rsi_disp, rsi_label)
+    # Prob gauge
+    prob_html = gauge_svg(prob_val, 100, prob_color, f"{prob_val:.0f}%",
+                          "High" if prob_val >= 65 else "Moderate" if prob_val >= 45 else "Low")
+
+    # R:R donut
+    total = 1 + max(rr_ratio, 0.01)
+    circ  = 2 * math.pi * 24
+    rd    = (1 / total) * circ
+    rwd   = (max(rr_ratio, 0.01) / total) * circ
+    rr_html = f"""
+    <div class="bz-metric-card">
+      <svg viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg" style="width:68px;height:68px;display:block;margin:0 auto 4px">
+        <circle cx="35" cy="35" r="24" fill="none" stroke="#ff4d6a" stroke-width="8"
+                stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 35 35)"/>
+        <circle cx="35" cy="35" r="24" fill="none" stroke="{acc_g}" stroke-width="8"
+                stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 35 35)"/>
+        <text x="35" y="31" text-anchor="middle" font-family="IBM Plex Mono" font-size="6.5" fill="{'#e3e2e2' if is_neon() else '#1a2333'}" font-weight="700">1:{rr_ratio:.1f}</text>
+        <text x="35" y="41" text-anchor="middle" font-family="IBM Plex Mono" font-size="5.5" fill="#6b7a94">R:R</text>
+      </svg>
+      <div class="bz-metric-val" style="color:{rr_color};font-size:16px">1:{rr_ratio:.2f}</div>
+      <div class="bz-metric-sub">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
+    </div>"""
+
+    # Sparkline
+    spark_pts = ""
+    if closes and len(closes) > 1:
+        mn, mx = min(closes), max(closes)
+        rng = mx - mn if mx != mn else 1
+        w, h = 90, 36
+        pts = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
+        spark_pts = f'<polyline points="{" ".join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8" stroke-linejoin="round"/>'
+
+    spark_html = f"""
+    <div class="bz-metric-card">
+      <svg viewBox="0 0 90 36" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:40px;display:block;margin:0 auto 4px">
+        {spark_pts}
+      </svg>
+      <div class="bz-metric-val" style="color:{pr_color}">{pr_text}</div>
+      <div class="bz-metric-sub">Period return</div>
+    </div>"""
+
+    c1, c2 = st.columns(2)
+    with c1: st.markdown(rsi_html,  unsafe_allow_html=True)
+    with c2: st.markdown(prob_html, unsafe_allow_html=True)
+    c3, c4 = st.columns(2)
+    with c3: st.markdown(rr_html,   unsafe_allow_html=True)
+    with c4: st.markdown(spark_html, unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  SIGNAL HISTORY TABLE
+# ══════════════════════════════════════════════════════════════
+def render_signal_history_table(ticker):
     history = st.session_state.signal_history.get(ticker, [])
     if not history:
         st.caption("No history yet — run Analyse a few times to build it.")
         return
-    t = THEMES[st.session_state.selected_theme]
-    rows_html = ""
-    for i, h in enumerate(reversed(history)):
-        sig = h["signal"]; sc = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
-        badge = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
-        chg_c = "#3fb950" if h.get("change_pct", 0) >= 0 else "#f85149"
+
+    rows = ""
+    for h in reversed(history):
+        sig = h["signal"]
+        sc  = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["WAIT"])
+        sc_c = sig_color(sc); sc_b = sig_bg(sc); sc_br = sig_border(sc)
+        chg_c = ("#BDFF00" if is_neon() else "#00d084") if h.get("change_pct", 0) >= 0 else "#ff4d6a"
         chg_s = "+" if h.get("change_pct", 0) >= 0 else ""
-        bg    = f"background:{t['bg2']}" if i % 2 == 0 else f"background:{t['bg1']}"
-        rows_html += f"""<tr style="{bg}">
-            <td style="padding:7px 10px;font-size:12px;color:{t['muted']}">{h['time']}</td>
-            <td style="padding:7px 10px;font-size:12px;color:{t['text']}"><b>{h['tf']}</b></td>
-            <td style="padding:7px 10px;font-size:12px;color:{t['text']}">₹{h['price']:,.2f} <span style="color:{chg_c};font-size:11px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
-            <td style="padding:7px 10px">{badge}</td>
-            <td style="padding:7px 10px;font-size:12px;color:{chg_c}">{h.get('regime','—')}</td>
-            <td style="padding:7px 10px;font-size:12px;color:{t['text']}">₹{h.get('target',0):,.2f}</td>
-            <td style="padding:7px 10px;font-size:12px;color:{t['text']}">₹{h.get('stop',0):,.2f}</td>
-            <td style="padding:7px 10px;font-size:12px;color:{t['text']}">{h.get('prob',0):.0f}%</td>
+        rows += f"""<tr>
+          <td style="color:#6b7a94">{h['time']}</td>
+          <td style="font-weight:600">{h['tf']}</td>
+          <td>₹{h['price']:,.2f} <span style="color:{chg_c};font-size:10px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
+          <td><span style="background:{sc_b};color:{sc_c};border:1px solid {sc_br};padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">{sc['icon']} {sig}</span></td>
+          <td style="color:#6b7a94">{h.get('regime','—')}</td>
+          <td style="color:{'#BDFF00' if is_neon() else '#00d084'}">₹{h.get('target',0):,.2f}</td>
+          <td style="color:#ff4d6a">₹{h.get('stop',0):,.2f}</td>
+          <td>{h.get('prob',0):.0f}%</td>
         </tr>"""
+
     st.markdown(f"""
-    <table style="width:100%;border-collapse:collapse;font-size:12px;background:{t['bg1']};border-radius:10px;overflow:hidden;border:1px solid {t['border2']}">
-      <thead><tr style="background:{t['bg2']};border-bottom:1px solid {t['border2']}">
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Time</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">TF</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Price</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Signal</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Regime</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Target</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Stop</th>
-        <th style="padding:8px 10px;text-align:left;font-size:10px;color:{t['muted']};text-transform:uppercase;letter-spacing:0.06em">Prob</th>
+    <table class="bz-hist-table">
+      <thead><tr>
+        <th>Time</th><th>TF</th><th>Price</th><th>Signal</th>
+        <th>Regime</th><th>Target</th><th>Stop</th><th>Prob</th>
       </tr></thead>
-      <tbody>{rows_html}</tbody>
+      <tbody>{rows}</tbody>
     </table>""", unsafe_allow_html=True)
 
-# ── UI Helpers ────────────────────────────────────────────────
-def metric_card(label, value, sub=None, value_color=None):
-    t = THEMES[st.session_state.selected_theme]
-    vc = value_color or t["text"]
-    sub_html = f'<div style="font-size:11px;color:{t["muted"]};margin-top:3px">{sub}</div>' if sub else ""
-    st.markdown(f"""
-    <div style="background:{t['bg2']};border:1px solid {t['border']};border-radius:10px;
-                padding:14px 16px;text-align:center;margin-bottom:4px">
-      <div style="font-size:10px;color:{t['muted']};font-weight:700;text-transform:uppercase;
-                  letter-spacing:0.08em;margin-bottom:6px">{label}</div>
-      <div style="font-size:18px;font-weight:800;color:{vc};letter-spacing:-0.01em;
-                  font-family:'IBM Plex Mono',monospace">{value}</div>
-      {sub_html}
-    </div>""", unsafe_allow_html=True)
-
-def indicator_row(label, value, reading="", reading_color=None):
-    t = THEMES[st.session_state.selected_theme]
-    rc = reading_color or t["muted"]
-    reading_html = f'<span style="color:{rc};font-weight:600">{reading}</span>' if reading else ""
-    st.markdown(f"""
-    <div style="display:flex;justify-content:space-between;padding:7px 0;
-                border-bottom:1px solid {t['border']};font-size:12.5px">
-      <span style="color:{t['muted']};font-size:12px">{label}</span>
-      <span style="color:{t['text']};font-family:'IBM Plex Mono',monospace">{value} {reading_html}</span>
-    </div>""", unsafe_allow_html=True)
-
-# ── Plotly Chart ──────────────────────────────────────────────
-def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, show_bb):
-    t = THEMES[st.session_state.selected_theme]
-    try:
-        import yfinance as yf
-        import plotly.graph_objects as go
-        from plotly.subplots import make_subplots
-        ticker_yf = tv_symbol.replace("NSE:", "") + ".NS"
-        df = yf.download(ticker_yf, period="6mo", progress=False, auto_adjust=True)
-        if df is None or len(df) < 10:
-            st.warning(f"Chart data unavailable for {tv_symbol}")
-            return
-        close  = df["Close"].squeeze()
-        high   = df["High"].squeeze()
-        low    = df["Low"].squeeze()
-        open_  = df["Open"].squeeze()
-        volume = df["Volume"].squeeze()
-        dates  = df.index
-
-        fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                            vertical_spacing=0.03, row_heights=[0.75, 0.25])
-        fig.add_trace(go.Candlestick(
-            x=dates, open=open_, high=high, low=low, close=close,
-            name=tv_symbol.replace("NSE:",""),
-            increasing_line_color="#26a641", decreasing_line_color="#f85149",
-            increasing_fillcolor="#26a641", decreasing_fillcolor="#f85149",
-        ), row=1, col=1)
-
-        ema20 = close.ewm(span=20).mean()
-        fig.add_trace(go.Scatter(x=dates, y=ema20, name="EMA20",
-            line=dict(color=t["blue"], width=1.5)), row=1, col=1)
-
-        if show_ema50:
-            ema50 = close.ewm(span=50).mean()
-            fig.add_trace(go.Scatter(x=dates, y=ema50, name="EMA50",
-                line=dict(color=t["amber"], width=1.5, dash="dot")), row=1, col=1)
-        if show_ema200:
-            ema200 = close.ewm(span=200).mean()
-            fig.add_trace(go.Scatter(x=dates, y=ema200, name="EMA200",
-                line=dict(color="#d29922", width=1.5, dash="dash")), row=1, col=1)
-        if show_bb:
-            sma20 = close.rolling(20).mean()
-            std20 = close.rolling(20).std()
-            fig.add_trace(go.Scatter(x=dates, y=sma20+2*std20, name="BB Upper",
-                line=dict(color=t["muted"], width=1, dash="dot")), row=1, col=1)
-            fig.add_trace(go.Scatter(x=dates, y=sma20-2*std20, name="BB Lower",
-                line=dict(color=t["muted"], width=1, dash="dot"),
-                fill="tonexty", fillcolor=f"rgba(139,148,158,0.08)"), row=1, col=1)
-
-        colors = ["#26a641" if c >= o else "#f85149" for c, o in zip(close, open_)]
-        fig.add_trace(go.Bar(x=dates, y=volume, name="Volume",
-            marker_color=colors, opacity=0.6), row=2, col=1)
-
-        fig.update_layout(
-            height=520, template="plotly_dark",
-            paper_bgcolor=t["bg"], plot_bgcolor=t["bg1"],
-            margin=dict(l=10, r=80, t=30, b=10),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0,
-                        bgcolor=f"rgba(0,0,0,0.5)", bordercolor=t["border2"], borderwidth=1,
-                        font=dict(color=t["text"], size=12)),
-            font=dict(color=t["text"], family=t["font"]),
-            xaxis_rangeslider_visible=False,
-            xaxis=dict(gridcolor=t["border"], color=t["muted"]),
-            xaxis2=dict(showgrid=False, color=t["muted"]),
-            yaxis=dict(gridcolor=t["border"], color=t["muted"]),
-            yaxis2=dict(gridcolor=t["border"], color=t["muted"]),
-        )
-        st.plotly_chart(fig, use_container_width=True, key=f"chart_{ticker_yf}_{st.session_state.selected_theme}")
-        tv_url = f"https://www.tradingview.com/chart/?symbol={tv_symbol}"
-        st.markdown(f'<a href="{tv_url}" target="_blank" style="display:inline-block;margin-top:4px;padding:6px 16px;background:{t["bg2"]};color:{t["blue"]};border-radius:8px;border:1px solid {t["border2"]};text-decoration:none;font-size:0.85rem;">📊 Open full chart on TradingView →</a>', unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"Chart error: {e}")
-
-# ── Visual Metrics ────────────────────────────────────────────
-def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
-    t = THEMES[st.session_state.selected_theme]
-    rsi_color  = t["red"] if (rsi_val or 50) > 70 else t["green"] if (rsi_val or 50) < 30 else t["amber"]
-    rsi_label  = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
-    rsi_disp   = f"{rsi_val:.1f}" if rsi_val else "—"
-    prob_color = t["green"] if prob_val >= 65 else t["amber"] if prob_val >= 45 else t["red"]
-    rr_color   = t["green"] if rr_ratio >= 2 else t["amber"] if rr_ratio >= 1 else t["red"]
-    pr_color   = t["green"] if (period_return or 0) >= 0 else t["red"]
-    pr_text    = fmt_pct(period_return) if period_return is not None else "—"
-
-    VM_CARD  = f"background:{t['bg2']};border:1px solid {t['border']};border-radius:10px;padding:14px 10px 12px;text-align:center"
-    VM_LABEL = f"font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:{t['muted']};margin-bottom:6px"
-    VM_SUB   = f"font-size:11px;color:{t['muted']};margin-top:4px"
-
-    def gauge_arc(val, max_val, color, label, disp, sub):
-        pct   = min(val / max_val, 1.0)
-        angle = pct * 180 - 180
-        rad   = math.radians(angle)
-        nx    = 60 + 38 * math.cos(rad)
-        ny    = 52 + 38 * math.sin(rad)
-        ex    = 60 + 50 * math.cos(math.radians(pct * 180 - 180))
-        ey    = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
-        large = 1 if pct > 0.5 else 0
-        return f"""
-        <div style="{VM_CARD}">
-          <div style="{VM_LABEL}">{label}</div>
-          <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:130px">
-            <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="{t['bg3']}" stroke-width="9" stroke-linecap="round"/>
-            <path d="M10 52 A50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round"/>
-            <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="60" cy="52" r="4" fill="{color}"/>
-          </svg>
-          <div style="font-size:22px;font-weight:800;color:{color};margin:4px 0 2px;letter-spacing:-0.01em;font-family:'IBM Plex Mono',monospace">{disp}</div>
-          <div style="{VM_SUB}">{sub}</div>
-        </div>"""
-
-    rsi_html  = gauge_arc(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_disp, rsi_label)
-    prob_html = gauge_arc(prob_val, 100, prob_color, "Success Prob.", f"{prob_val:.0f}%",
-                          "High confidence" if prob_val >= 65 else "Moderate" if prob_val >= 45 else "Low confidence")
-
-    total = 1 + max(rr_ratio, 0.01)
-    circ  = 2 * math.pi * 28
-    rd    = (1 / total) * circ
-    rwd   = (max(rr_ratio, 0.01) / total) * circ
-    rr_html = f"""
-    <div style="{VM_CARD}">
-      <div style="{VM_LABEL}">Risk : Reward</div>
-      <svg viewBox="0 0 80 76" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:76px;display:block;margin:0 auto">
-        <circle cx="40" cy="40" r="28" fill="none" stroke="{t['red']}" stroke-width="9"
-                stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
-        <circle cx="40" cy="40" r="28" fill="none" stroke="{t['green']}" stroke-width="9"
-                stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 40 40)"/>
-        <text x="40" y="37" text-anchor="middle" font-size="8.5" fill="{rr_color}" font-weight="700" font-family="sans-serif">1:{rr_ratio:.1f}</text>
-        <text x="40" y="48" text-anchor="middle" font-size="7" fill="{t['muted']}" font-family="sans-serif">R:R</text>
-      </svg>
-      <div style="font-size:16px;font-weight:800;color:{rr_color};margin:4px 0 2px;font-family:'IBM Plex Mono',monospace">1 : {rr_ratio:.2f}</div>
-      <div style="{VM_SUB}">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
-    </div>"""
-
-    spark_svg = ""
-    if closes and len(closes) > 1:
-        mn, mx = min(closes), max(closes)
-        rng    = mx - mn if mx != mn else 1
-        w, h   = 180, 40
-        pts    = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
-        spark_svg = f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:42px;display:block">
-          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8" stroke-linejoin="round"/>
-        </svg>"""
-
-    spark_html = f"""
-    <div style="{VM_CARD}">
-      <div style="{VM_LABEL}">Period Return</div>
-      <div style="padding:4px 6px 0">{spark_svg}</div>
-      <div style="font-size:22px;font-weight:800;color:{pr_color};margin:4px 0 2px;font-family:'IBM Plex Mono',monospace">{pr_text}</div>
-      <div style="{VM_SUB}">{'Positive' if (period_return or 0) >= 0 else 'Negative'} over period</div>
-    </div>"""
-
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(rsi_html,   unsafe_allow_html=True)
-    with c2: st.markdown(prob_html,  unsafe_allow_html=True)
-    with c3: st.markdown(rr_html,    unsafe_allow_html=True)
-    with c4: st.markdown(spark_html, unsafe_allow_html=True)
-
-# ── Chart Toggle Bar ──────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+#  CHART TOGGLE BAR
+# ══════════════════════════════════════════════════════════════
 def render_chart_toggle_bar():
     c1, c2, c3, _, _, _, _ = st.columns([1.2, 1.2, 1.8, 1, 1, 1, 1])
     with c1:
@@ -1003,166 +1327,114 @@ def render_chart_toggle_bar():
         if st.button(lbl, key="t_ema200", use_container_width=True):
             st.session_state.chart_show_ema200 = not st.session_state.chart_show_ema200; st.rerun()
     with c3:
-        lbl = "🔵 Bollinger Bands ✓" if st.session_state.chart_show_bb else "🔵 Bollinger Bands"
+        lbl = "🔵 Bollinger ✓" if st.session_state.chart_show_bb else "🔵 Bollinger"
         if st.button(lbl, key="t_bb", use_container_width=True):
             st.session_state.chart_show_bb = not st.session_state.chart_show_bb; st.rerun()
 
-# ── Section label helper ──────────────────────────────────────
-def section_label(text):
-    t = THEMES[st.session_state.selected_theme]
-    st.markdown(f'<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:{t["muted"]};padding:0 0 8px;border-bottom:1px solid {t["border"]};margin-bottom:12px">{text}</div>', unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════════════
+#  FUNDAMENTALS
+# ══════════════════════════════════════════════════════════════
+def render_fundamentals(price_data, ticker, stock):
+    def ind_row(label, val, badge_text="", badge_class="bz-badge-neut"):
+        badge = f'<span class="bz-ind-badge {badge_class}">{badge_text}</span>' if badge_text else ""
+        return f'<div class="bz-ind-row"><span class="bz-ind-key">{label}</span><span class="bz-mono">{val}{badge}</span></div>'
 
-# ── Main App ──────────────────────────────────────────────────
-def main():
-    # ── Sidebar ────────────────────────────────────────────────
-    with st.sidebar:
-        # Theme selector — first widget in sidebar
-        theme_options = list(THEMES.keys())
-        theme_labels  = [THEMES[k]["label"] for k in theme_options]
-        theme_idx     = theme_options.index(st.session_state.selected_theme)
-        chosen_theme  = st.selectbox(
-            "🎨 Theme",
-            theme_options,
-            index=theme_idx,
-            format_func=lambda k: THEMES[k]["label"],
-        )
-        if chosen_theme != st.session_state.selected_theme:
-            st.session_state.selected_theme = chosen_theme
-            st.rerun()
+    pe  = price_data.get("pe_ratio")
+    eps = price_data.get("eps")
+    mc  = price_data.get("market_cap")
+    rg  = price_data.get("revenue_growth")
+    de  = price_data.get("debt_equity")
+    roe = price_data.get("roe")
+    dy  = price_data.get("dividend_yield")
+    sec = price_data.get("sector")
+    bv  = price_data.get("book_value")
+    pb  = price_data.get("price_to_book")
+    cr  = price_data.get("current_ratio")
+    pm  = price_data.get("profit_margins")
 
-        # Inject theme CSS immediately after selection
-        inject_theme(st.session_state.selected_theme)
-
-        t = THEMES[st.session_state.selected_theme]
-
-        st.markdown(f"""
-        <div style="padding:20px 8px 16px;border-bottom:1px solid {t['border2']};margin-bottom:16px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="font-size:28px;line-height:1">🐂</div>
-            <div>
-              <div style="font-size:16px;font-weight:800;letter-spacing:0.02em;color:{t['text']}">
-                BullzStock
-              </div>
-              <div style="font-size:10px;color:{t['muted']};letter-spacing:0.08em;text-transform:uppercase">
-                NSE India · Signal Engine
-              </div>
-            </div>
-          </div>
-        </div>""", unsafe_allow_html=True)
-
-        industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
-        chosen_ind = st.selectbox(
-            "🏭 Filter by Industry",
-            industries,
-            format_func=lambda x: f"{INDUSTRY_ICONS.get(x, '📌')} {x}"
-        )
-
-        filtered       = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
-        ticker_options = list(filtered.keys())
-        ticker_labels  = [f"{INDUSTRY_ICONS.get(filtered[t_]['industry'],'📌')} {t_} — {filtered[t_]['name']}" for t_ in ticker_options]
-        ticker_idx     = st.selectbox("📈 Select Stock", range(len(ticker_options)), format_func=lambda i: ticker_labels[i])
-        ticker         = ticker_options[ticker_idx]
-
-        tf_key = st.radio(
-            "⏱ Timeframe",
-            list(TIMEFRAMES.keys()),
-            format_func=lambda k: TIMEFRAMES[k]["label"],
-            index=2,
-        )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        analyse = st.button("🔍  Analyse Now", use_container_width=True, type="primary")
-
-        s = STOCKS[ticker]
-        st.markdown(f"""
-        <div style="background:{t['bg2']};border-radius:8px;padding:10px 14px;margin:8px 0;
-                    border-left:3px solid {t['sidebar_border']};font-size:12px;color:{t['text']}">
-          <div style="font-weight:700;font-size:13px">{INDUSTRY_ICONS.get(s['industry'],'📌')} {ticker}</div>
-          <div style="font-size:12px;margin-top:2px">{s['fullName']}</div>
-          <div style="font-size:11px;color:{t['muted']};margin-top:4px">
-            Industry: {s['industry']}<br>
-            Timeframe: {TIMEFRAMES[tf_key]['label']}
-          </div>
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("---")
-        st.markdown(f"""
-        <div style="font-size:11px;color:{t['muted']};line-height:1.7">
-          <b style="color:{t['text']}">🕐 NSE Hours</b><br>
-          Mon–Fri · 9:15 AM – 3:30 PM IST<br><br>
-          <b style="color:{t['text']}">📡 Data Sources</b><br>
-          Yahoo Finance · Alpha Vantage<br><br>
-          <b style="color:{t['text']}">📊 Indicators</b><br>
-          RSI · MACD · EMA 50/200<br>
-          Bollinger Bands · ATR · Stochastic
-        </div>""", unsafe_allow_html=True)
-
-        st.markdown("---")
-        if st.button("🗑️ Clear Signal History", use_container_width=True):
-            st.session_state.signal_history = {}
-            st.success("History cleared")
-
-    # Also inject theme for non-sidebar elements (called after sidebar block)
-    inject_theme(st.session_state.selected_theme)
-    t = THEMES[st.session_state.selected_theme]
-
-    # ── Header ────────────────────────────────────────────────
     st.markdown(f"""
-    <div style="display:flex;align-items:center;gap:16px;padding:8px 0 16px;
-                border-bottom:1px solid {t['border2']};margin-bottom:1.2rem">
-      <div style="font-size:38px;line-height:1">🐂</div>
-      <div>
-        <div style="font-size:22px;font-weight:800;color:{t['text']};line-height:1.1;letter-spacing:-0.01em">
-          BullzStock Intelligence
-        </div>
-        <div style="font-size:11px;color:{t['muted']};margin-top:3px;letter-spacing:0.02em">
-          NSE India · Rule-Based Signal Engine · ATR Targets · Live Charts
-        </div>
-      </div>
-      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-        <span style="background:{t['bg2']};color:{t['accent']};padding:3px 10px;border-radius:20px;
-                     font-size:10px;font-weight:700;border:1px solid {t['border2']};
-                     text-transform:uppercase;letter-spacing:0.05em">● LIVE</span>
-        <span style="background:{t['bg2']};color:{t['muted']};padding:3px 10px;border-radius:20px;
-                     font-size:10px;border:1px solid {t['border']}">v5</span>
-      </div>
-    </div>""", unsafe_allow_html=True)
+    {ind_row("P/E Ratio",      f"{pe:.1f}" if pe else "—",        "High" if pe and pe > 30 else "Moderate" if pe else "", "bz-badge-warn" if pe and pe > 30 else "bz-badge-neut")}
+    {ind_row("EPS",            f"₹{eps:.2f}" if eps else "—")}
+    {ind_row("Market Cap",     f"₹{mc/1e7:.0f} Cr" if mc else "—")}
+    {ind_row("Revenue Growth", f"{rg*100:.1f}%" if rg else "—", "Positive" if rg and rg > 0 else "", "bz-badge-bull" if rg and rg > 0 else "bz-badge-neut")}
+    {ind_row("Debt / Equity",  f"{de:.2f}" if de else "—",        "High leverage" if de and de > 1 else "", "bz-badge-warn" if de and de > 1 else "bz-badge-neut")}
+    {ind_row("ROE",            f"{roe*100:.1f}%" if roe else "—", "Strong" if roe and roe > 0.15 else "", "bz-badge-bull" if roe and roe > 0.15 else "bz-badge-neut")}
+    {ind_row("Dividend Yield", f"{dy*100:.2f}%" if dy else "—")}
+    {ind_row("Book Value",     f"₹{bv:.2f}" if bv else "—")}
+    {ind_row("Price/Book",     f"{pb:.2f}x" if pb else "—")}
+    {ind_row("Current Ratio",  f"{cr:.2f}" if cr else "—")}
+    {ind_row("Profit Margin",  f"{pm*100:.1f}%" if pm else "—")}
+    {ind_row("Sector",         sec or "—")}
+    {ind_row("52W High",       fmt_inr(price_data.get("52w_high")))}
+    {ind_row("52W Low",        fmt_inr(price_data.get("52w_low")))}
+    {ind_row("Data Source",    price_data["source"])}
+    """, unsafe_allow_html=True)
 
-    if not analyse:
+    if not any([pe, eps, mc, roe, de]):
+        link_c = "#4d9fff" if is_neon() else "#2563eb"
+        _, mc_link = get_news_link(ticker, stock["fullName"])
+        st.markdown(f'<div style="font-size:10px;color:#6b7a94;margin-top:8px">⚠️ Fundamental data unavailable for this stock. <a href="{mc_link}" target="_blank" style="color:{link_c}">View on MoneyControl</a></div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════
+#  MAIN
+# ══════════════════════════════════════════════════════════════
+def main():
+    inject_global_css()
+    render_sidebar()
+
+    ticker = st.session_state.selected_ticker
+    tf_key = st.session_state.selected_tf
+    stock  = STOCKS[ticker]
+    tf     = TIMEFRAMES[tf_key]
+    acc_g  = "#BDFF00" if is_neon() else "#00d084"
+
+    # ── Ticker strip ──────────────────────────────────────────
+    render_ticker_strip()
+
+    # ── Welcome state ─────────────────────────────────────────
+    if not st.session_state.analyse_clicked:
         st.markdown(f"""
-        <div style="margin-top:2rem;padding:40px 32px;background:{t['bg1']};border:1px solid {t['border2']};
-                    border-radius:16px;text-align:center">
-          <div style="font-size:48px;margin-bottom:12px">🐂</div>
-          <div style="font-size:20px;font-weight:700;color:{t['text']};margin-bottom:8px">
-            Select a stock and click Analyse Now
+        <div class="bz-price-header">
+          <div style="font-size:9px;color:#6b7a94;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px">
+            {INDUSTRY_ICONS.get(stock['industry'],'📌')} {stock['fullName']} · NSE · {tf['label']}
           </div>
-          <div style="font-size:13px;color:{t['muted']};max-width:480px;margin:0 auto;line-height:1.7">
-            BullzStock runs a multi-indicator signal engine across RSI, MACD, EMA 50/200,
-            Bollinger Bands, ATR, and Stochastic to generate entry, stop loss, and target levels.
+          <div style="font-size:28px;font-weight:800;color:{'#e3e2e2' if is_neon() else '#1a2333'}">
+            🐂 BullzStock Intelligence
           </div>
-          <div style="display:flex;gap:16px;justify-content:center;margin-top:28px;flex-wrap:wrap">
-            <div style="background:{t['bg2']};border:1px solid {t['border']};border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
-              <div style="font-size:18px;margin-bottom:6px">🎯</div>
-              <div style="font-size:12px;font-weight:700;color:{t['text']}">ATR-Based Targets</div>
-              <div style="font-size:11px;color:{t['muted']};margin-top:3px">Entry · Target · Stop Loss</div>
-            </div>
-            <div style="background:{t['bg2']};border:1px solid {t['border']};border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
-              <div style="font-size:18px;margin-bottom:6px">📊</div>
-              <div style="font-size:12px;font-weight:700;color:{t['text']}">6-Indicator Confluence</div>
-              <div style="font-size:11px;color:{t['muted']};margin-top:3px">RSI · MACD · EMA · Bollinger</div>
-            </div>
-            <div style="background:{t['bg2']};border:1px solid {t['border']};border-radius:10px;padding:14px 20px;text-align:left;min-width:180px">
-              <div style="font-size:18px;margin-bottom:6px">📈</div>
-              <div style="font-size:12px;font-weight:700;color:{t['text']}">Live Plotly Charts</div>
-              <div style="font-size:11px;color:{t['muted']};margin-top:3px">Candlestick + Volume</div>
-            </div>
+          <div style="font-size:12px;color:#6b7a94;margin-top:4px">
+            Select a stock from the sidebar, choose a timeframe, then click <b style="color:{acc_g}">Analyse Now</b>
           </div>
         </div>""", unsafe_allow_html=True)
+
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.markdown(f"""
+            <div style="background:{'rgba(255,255,255,0.03)' if is_neon() else '#fff'};border:1px solid rgba({'255,255,255,0.06' if is_neon() else '0,0,0,0.07'});border-radius:10px;padding:16px 18px">
+              <div class="bz-panel-title">How to use</div>
+              <div style="font-size:12px;color:{'#c9d1d9' if is_neon() else '#374151'};line-height:1.8">
+                1. Pick an industry filter in the sidebar<br>
+                2. Click a stock card to select it<br>
+                3. Pick a timeframe (1D · 1W · 1M · 6M · 9M)<br>
+                4. Click <b style="color:{acc_g}">⚡ Analyse Now</b><br>
+                5. Review signal, chart, and trade levels
+              </div>
+            </div>""", unsafe_allow_html=True)
+        with col_r:
+            st.markdown(f"""
+            <div style="background:{'rgba(255,255,255,0.03)' if is_neon() else '#fff'};border:1px solid rgba({'255,255,255,0.06' if is_neon() else '0,0,0,0.07'});border-radius:10px;padding:16px 18px">
+              <div class="bz-panel-title">What you get</div>
+              <div style="font-size:12px;color:{'#c9d1d9' if is_neon() else '#374151'};line-height:1.8">
+                📈 Live TradingView chart + EMA/BB overlays<br>
+                🎯 Entry · Target · Stop Loss (ATR-based)<br>
+                💡 2-line signal reasoning (plain English)<br>
+                📊 RSI gauge · Prob · R:R donut · Sparkline<br>
+                📋 Fundamentals from Yahoo Finance<br>
+                🕐 Session signal history table
+              </div>
+            </div>""", unsafe_allow_html=True)
         return
 
-    stock = STOCKS[ticker]
-    tf    = TIMEFRAMES[tf_key]
-
+    # ── Fetch data ────────────────────────────────────────────
     with st.spinner(f"Fetching {tf['label']} data for {stock['fullName']}..."):
         price_data = fetch_market_data(ticker, tf_key)
 
@@ -1170,21 +1442,13 @@ def main():
         st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
         return
 
-    ind = compute_all(price_data)
-    sig = generate_signal(
-        price_data["closes"], price_data["highs"],
-        price_data["lows"],   price_data["volumes"], ind
-    )
-
+    ind    = compute_all(price_data)
+    sig    = generate_signal(price_data["closes"], price_data["highs"],
+                             price_data["lows"], price_data["volumes"], ind)
     curr   = price_data["current_price"]
     chg_up = price_data["change"] >= 0
     signal = sig["signal"]
-    sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
-    macd   = ind["macd"]
-    boll   = ind["bollinger"]
-    rsi    = ind["rsi"]
-    ema50  = ind["ema50"]
-    ema200 = ind["ema200"]
+    sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["WAIT"])
 
     update_signal_history(ticker, {
         "time": datetime.now().strftime("%H:%M:%S"), "tf": tf["label"],
@@ -1194,185 +1458,121 @@ def main():
         "prob": sig["success_prob"],
     })
 
-    # ── Live price strip ──────────────────────────────────────
-    chg_color  = t["green"] if chg_up else t["red"]
-    chg_sym    = "▲" if chg_up else "▼"
-    border_col = t["green"] if chg_up else t["red"]
+    sc_color = sig_color(sc)
+    chg_sym  = "▲" if chg_up else "▼"
+    chg_col  = ("#BDFF00" if is_neon() else "#00d084") if chg_up else "#ff4d6a"
+
+    # ── Price header ──────────────────────────────────────────
     st.markdown(f"""
-    <div style="background:{t['bg1']};border:1px solid {border_col}33;border-left:4px solid {border_col};
-                border-radius:12px;padding:16px 24px;margin-bottom:1.2rem;
-                display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div class="bz-price-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div>
-        <div style="font-size:11px;color:{t['muted']};font-weight:700;text-transform:uppercase;
-                    letter-spacing:0.07em;margin-bottom:4px">
-          {INDUSTRY_ICONS.get(stock['industry'],'📌')} {stock['fullName']} · NSE · {tf['label']}
+        <div style="font-size:9px;color:#6b7a94;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px">
+          Signal · {tf['label']} · {sig['regime']}
         </div>
-        <div style="display:flex;align-items:baseline;gap:10px">
-          <span style="font-size:32px;font-weight:800;color:{t['text']};letter-spacing:-0.02em;
-                       font-family:'IBM Plex Mono',monospace">₹{curr:,.2f}</span>
-          <span style="font-size:15px;color:{chg_color};font-weight:600">{chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
+        <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;
+                      color:{'#e3e2e2' if is_neon() else '#1a2333'}">₹{curr:,.2f}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:{chg_col}">
+            {chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)
+          </div>
+        </div>
+        <div style="font-size:11px;color:#6b7a94;margin-top:4px">
+          {stock['fullName']} · NSE · Prev close ₹{price_data['prev_close']:,.2f}
         </div>
       </div>
-      <div style="font-size:11px;color:{t['muted']};text-align:right;line-height:1.7">
-        <div>{price_data['time']} IST · {price_data['source']}</div>
-        <div>Prev close ₹{price_data['prev_close']:,.2f} · {ind['candles']} candles</div>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:#6b7a94">{price_data['time']} IST · {price_data['source']}</div>
+        <div style="font-size:9px;color:#6b7a94;margin-top:2px">{ind['candles']} candles · {tf['label']}</div>
+        <div style="margin-top:8px;background:{sig_bg(sc)};color:{sc_color};border:1px solid {sig_border(sc)};
+                    padding:4px 14px;border-radius:20px;font-size:11px;font-weight:800;display:inline-block">
+          {sc['icon']} {signal}
+        </div>
       </div>
     </div>""", unsafe_allow_html=True)
 
-    # OHLCV
-    c1,c2,c3,c4,c5,c6 = st.columns(6)
-    with c1: metric_card("Open",     fmt_inr(price_data["open"]))
-    with c2: metric_card("High",     fmt_inr(price_data["high"]),          value_color=t["green"])
-    with c3: metric_card("Low",      fmt_inr(price_data["low"]),           value_color=t["red"])
-    with c4: metric_card("Volume",   f"{price_data['volume']/1e5:.1f}L")
-    with c5: metric_card("52W High", fmt_inr(price_data.get("52w_high")), value_color=t["green"])
-    with c6: metric_card("52W Low",  fmt_inr(price_data.get("52w_low")),  value_color=t["red"])
+    # ── OHLCV ─────────────────────────────────────────────────
+    render_ohlcv(price_data)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # ── Signal Box + Reasoning ────────────────────────────────
-    confluence   = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
-    votes_html   = "".join(f'<div style="font-size:12px;padding:3px 0;color:{t["text"]}">· {v}</div>' for v in sig["votes"])
-    line1, line2 = build_signal_reasoning(sig, ind, price_data)
-    google_link, mc_link = get_news_link(ticker, stock["fullName"])
+    # ── Main layout: left (chart+indicators) | right (signal panel) ──
+    col_main, col_right = st.columns([3, 1])
 
-    st.markdown(f"""
-    <div style="border-radius:12px;padding:20px 24px;margin-bottom:1rem;
-                background:{sc['bg']};border:1px solid {sc['border']}66;border-left:4px solid {sc['border']}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:16px">
-        <div>
-          <div style="font-size:10px;color:{sc['color']};font-weight:700;text-transform:uppercase;
-                      letter-spacing:0.1em;margin-bottom:6px">
-            Signal · {tf['label']} · {sig['regime']}
-          </div>
-          <div style="font-size:28px;font-weight:900;color:{sc['color']};line-height:1;letter-spacing:-0.01em">
-            {sc['icon']} {signal}
-          </div>
-          <div style="font-size:12px;color:{sc['color']}99;margin-top:6px;font-weight:600">{confluence}</div>
-        </div>
-        <div style="max-width:380px">{votes_html}</div>
-      </div>
-    </div>
-    <div style="border-radius:10px;padding:16px 20px;margin:8px 0;
-                background:{t['bg2']};border:1px solid {t['border2']};
-                font-size:13px;line-height:1.7;color:{t['text']}">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:{t['muted']};
-                  letter-spacing:0.08em;margin-bottom:8px">💡 Signal Reasoning</div>
-      <div>📌 {line1}</div>
-      <div style="margin-top:5px">📌 {line2}</div>
-      <div style="margin-top:10px;font-size:11px;color:{t['muted']}">
-        🔗 News:
-        <a href="{google_link}" target="_blank" style="color:{t['blue']};text-decoration:none">Google News</a>
-        &nbsp;·&nbsp;
-        <a href="{mc_link}" target="_blank" style="color:{t['blue']};text-decoration:none">MoneyControl</a>
-        &nbsp;·&nbsp;
-        <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:{t['blue']};text-decoration:none">Economic Times</a>
-      </div>
-    </div>""", unsafe_allow_html=True)
+    with col_main:
+        # Chart toggle + TradingView chart
+        render_chart_toggle_bar()
+        render_tradingview_chart(
+            stock["tv"], tf["tv_interval"],
+            st.session_state.chart_show_ema50,
+            st.session_state.chart_show_ema200,
+            st.session_state.chart_show_bb,
+        )
 
-    # ── Trade Levels ──────────────────────────────────────────
-    section_label("🎯 Trade Levels")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color=t["blue"])
-    with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color=t["green"])
-    with c3: metric_card("Stop Loss",     fmt_inr(sig["stop_loss"]),    value_color=t["red"])
-    with c4: metric_card("Hold Duration", sig["hold_duration"])
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        # ── Indicators + Fundamentals ──────────────────────────
+        col_ind, col_fund = st.columns(2)
 
-    # ── Visual Metrics ────────────────────────────────────────
-    section_label("📊 Visual Metrics")
-    render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
-                          price_data["closes"], ind["period_return"])
+        with col_ind:
+            st.markdown(f'<div class="bz-panel-title">📐 Technical Indicators</div>', unsafe_allow_html=True)
+            rsi     = ind["rsi"]
+            macd    = ind["macd"]
+            boll    = ind["bollinger"]
+            ema50   = ind["ema50"]
+            ema200  = ind["ema200"]
+            rsi_val  = f"{rsi:.2f}"          if rsi            else "—"
+            macd_val = f"{macd['hist']:.4f}" if macd["hist"]   else "—"
+            boll_val = f"{boll['pct']:.1f}%" if boll["pct"]    else "—"
+            sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"] else "—"
 
-    st.markdown("<br>", unsafe_allow_html=True)
+            rsi_read  = ("Overbought", "bz-badge-bear") if rsi and rsi > 70 else ("Oversold", "bz-badge-bull") if rsi and rsi < 30 else ("Neutral", "bz-badge-neut")
+            macd_read = ("Bullish ▲", "bz-badge-bull") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "bz-badge-bear")
+            ema_read  = ("Golden Cross ▲", "bz-badge-bull") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "bz-badge-bear") if ema50 and ema200 else ("N/A", "bz-badge-neut")
+            sk_read   = ("Overbought", "bz-badge-bear") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "bz-badge-bull") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "bz-badge-neut")
 
-    # ── Chart ─────────────────────────────────────────────────
-    section_label("📈 Live Chart")
-    st.caption("Powered by Plotly · Use zoom, pan, and range slider")
-    render_chart_toggle_bar()
-    render_tradingview_chart(
-        stock["tv"], tf["tv_interval"],
-        st.session_state.chart_show_ema50,
-        st.session_state.chart_show_ema200,
-        st.session_state.chart_show_bb,
-    )
+            def ind_row(label, val, badge_text="", badge_class=""):
+                badge = f'<span class="bz-ind-badge {badge_class}">{badge_text}</span>' if badge_text else ""
+                return f'<div class="bz-ind-row"><span class="bz-ind-key">{label}</span><span class="bz-mono">{val}{badge}</span></div>'
 
-    st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(f"""
+            {ind_row("RSI (14)",       rsi_val,          *rsi_read)}
+            {ind_row("MACD Histogram", macd_val,         *macd_read)}
+            {ind_row("Bollinger %B",   boll_val,         boll["position"], badge_cls(boll["position"]))}
+            {ind_row("EMA 50",         fmt_inr(ema50),   f"{'Above' if ema50 and curr > ema50 else 'Below'} EMA50", "bz-badge-bull" if ema50 and curr > ema50 else "bz-badge-bear")}
+            {ind_row("EMA 200",        fmt_inr(ema200),  *ema_read)}
+            {ind_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility", "bz-badge-neut")}
+            {ind_row("Stochastic K",   sk_val,           *sk_read)}
+            {ind_row("Period Return",  fmt_pct(ind["period_return"]))}
+            {ind_row("Volume Trend",   ind["volume_trend"])}
+            {ind_row("Trend",          ind["trend"])}
+            {ind_row("Candlestick",    ind["pattern"])}
+            {ind_row("Candles used",   str(ind["candles"]))}
+            """, unsafe_allow_html=True)
 
-    # ── Indicators + Fundamentals ─────────────────────────────
-    col_ind, col_fund = st.columns(2)
+        with col_fund:
+            st.markdown(f'<div class="bz-panel-title">📋 Fundamentals</div>', unsafe_allow_html=True)
+            render_fundamentals(price_data, ticker, stock)
 
-    with col_ind:
-        section_label("📐 Technical Indicators")
-        rsi_val  = f"{rsi:.2f}"             if rsi             else "—"
-        macd_val = f"{macd['hist']:.4f}"    if macd["hist"]    else "—"
-        boll_val = f"{boll['pct']:.1f}%"    if boll["pct"]     else "—"
-        sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"]  else "—"
-        pr       = ind["period_return"]
+        st.markdown("<br>", unsafe_allow_html=True)
 
-        rsi_read  = ("Overbought", t["red"])   if rsi and rsi > 70 else ("Oversold", t["green"]) if rsi and rsi < 30 else ("Neutral", t["muted"])
-        macd_read = ("Bullish ▲",  t["green"]) if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", t["red"])
-        ema_read  = ("Golden Cross ▲", t["green"]) if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", t["red"]) if ema50 and ema200 else ("N/A", t["muted"])
-        sk_read   = ("Overbought", t["red"])   if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", t["green"]) if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", t["muted"])
+        # ── Signal History ─────────────────────────────────────
+        st.markdown(f'<div class="bz-panel-title">🕐 Signal History · Session</div>', unsafe_allow_html=True)
+        render_signal_history_table(ticker)
 
-        indicator_row("RSI (14)",       rsi_val,  *rsi_read)
-        indicator_row("MACD Histogram", macd_val, *macd_read)
-        indicator_row("Bollinger %B",   boll_val, boll["position"])
-        indicator_row("EMA 50",         fmt_inr(ema50),  f"Price {'above' if ema50 and curr > ema50 else 'below'} EMA50" if ema50 else "—")
-        indicator_row("EMA 200",        fmt_inr(ema200), *ema_read)
-        indicator_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility measure")
-        indicator_row("Stochastic K",   sk_val, *sk_read)
-        indicator_row("Period Return",  fmt_pct(pr), "▲" if pr and pr >= 0 else "▼", t["green"] if pr and pr >= 0 else t["red"])
-        indicator_row("Volume Trend",   ind["volume_trend"])
-        indicator_row("Trend",          ind["trend"])
-        indicator_row("Candlestick",    ind["pattern"])
-        indicator_row("Candles used",   str(ind["candles"]))
+    with col_right:
+        render_right_panel(sig, ind, price_data, stock, tf, ticker)
 
-    with col_fund:
-        section_label("📋 Fundamentals")
-        pe  = price_data.get("pe_ratio")
-        eps = price_data.get("eps")
-        mc  = price_data.get("market_cap")
-        rg  = price_data.get("revenue_growth")
-        de  = price_data.get("debt_equity")
-        roe = price_data.get("roe")
-        dy  = price_data.get("dividend_yield")
-        sec = price_data.get("sector")
-        bv  = price_data.get("book_value")
-        pb  = price_data.get("price_to_book")
-        cr  = price_data.get("current_ratio")
-        pm  = price_data.get("profit_margins")
-
-        indicator_row("P/E Ratio",      f"{pe:.1f}" if pe else "—",          "High" if pe and pe > 30 else "Moderate" if pe else "")
-        indicator_row("EPS",            f"₹{eps:.2f}" if eps else "—")
-        indicator_row("Market Cap",     f"₹{mc/1e7:.0f} Cr" if mc else "—")
-        indicator_row("Revenue Growth", f"{rg*100:.1f}%" if rg else "—")
-        indicator_row("Debt / Equity",  f"{de:.2f}" if de else "—",          "High leverage" if de and de > 1 else "")
-        indicator_row("ROE",            f"{roe*100:.1f}%" if roe else "—",   "Strong" if roe and roe > 0.15 else "")
-        indicator_row("Dividend Yield", f"{dy*100:.2f}%" if dy else "—")
-        indicator_row("Book Value",     f"₹{bv:.2f}" if bv else "—")
-        indicator_row("Price/Book",     f"{pb:.2f}x" if pb else "—")
-        indicator_row("Current Ratio",  f"{cr:.2f}" if cr else "—")
-        indicator_row("Profit Margin",  f"{pm*100:.1f}%" if pm else "—")
-        indicator_row("Sector",         sec or "—")
-        indicator_row("52W High",       fmt_inr(price_data.get("52w_high")))
-        indicator_row("52W Low",        fmt_inr(price_data.get("52w_low")))
-        indicator_row("Data Source",    price_data["source"])
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Signal History ────────────────────────────────────────
-    section_label("🕐 Signal History · Session")
-    st.caption(f"Last 10 analyses for **{stock['fullName']}** this session")
-    render_signal_history(ticker)
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ── Telegram alert ────────────────────────────────────────
+    if curr >= sig["target_price"] * 0.98:
+        msg = (f"🎯 Target Alert — {ticker}\n\nCurrent: {fmt_inr(curr)}\n"
+               f"Target: {fmt_inr(sig['target_price'])}\nSignal: {signal}\n"
+               f"Profit: +{sig['profit_potential']:.1f}%\nProbability: {sig['success_prob']:.0f}%")
+        ok = send_telegram(msg)
+        st.success("🎯 Target reached! Telegram alert sent.") if ok else st.warning("Target reached but Telegram alert failed.")
 
     # ── Disclaimer ────────────────────────────────────────────
     st.markdown(f"""
-    <div style="font-size:11px;color:{t['muted']};margin-top:1rem;padding:10px 16px;
-                background:{t['bg1']};border:1px solid {t['border']};border-radius:8px">
+    <div class="bz-disclaimer">
       ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence —
       <b>not financial advice</b>. Always consult a SEBI-registered investment advisor before investing.
       NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
