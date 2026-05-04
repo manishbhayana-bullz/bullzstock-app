@@ -1079,57 +1079,44 @@ def main():
     tf    = TIMEFRAMES[tf_key]
 
     with st.spinner(f"Fetching {tf['label']} data for {stock['fullName']}..."):
-   price_data = fetch_market_data(ticker, tf_key)
+    price_data = fetch_market_data(ticker, tf_key)
 
-if not price_data:
-    st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
-    return
+    if not price_data:
+        st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
+        return
 
-ind = compute_all(price_data)
+    ind = compute_all(price_data)
 
-sig = generate_signal(
-    price_data["closes"],
-    price_data["highs"],
-    price_data["lows"],
-    price_data["volumes"],
-    ind
-)
-selected_html = load_theme_html(
-    st.session_state.selected_theme,
-    stock_data=price_data,
-    signal_data=sig,
-    stock_meta={
-        "ticker": ticker,
-        "fullName": STOCKS[ticker]["fullName"]
-    },
-    timeframe=tf_key
-)
+    sig = generate_signal(
+        price_data["closes"],
+        price_data["highs"],
+        price_data["lows"],
+        price_data["volumes"],
+        ind
+    )
 
-components.html(selected_html, height=900, scrolling=True)
+    selected_html = load_theme_html(
+        st.session_state.selected_theme,
+        stock_data=price_data,
+        signal_data=sig,
+        stock_meta={
+            "ticker": ticker,
+            "fullName": STOCKS[ticker]["fullName"]
+        },
+        timeframe=tf_key
+    )
 
-# Render selected HTML theme here
-selected_html = load_theme_html(
-    st.session_state.selected_theme,
-    stock_data=price_data,
-    signal_data=sig,   # IMPORTANT: sig, not signal
-    stock_meta={
-        "ticker": ticker,
-        "fullName": STOCKS[ticker]["fullName"]
-    },
-    timeframe=tf_key
-)
+    components.html(selected_html, height=900, scrolling=True)
 
-components.html(selected_html, height=900, scrolling=True)
-
-curr   = price_data["current_price"]
-chg_up = price_data["change"] >= 0
-signal = sig["signal"]
-sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
-macd   = ind["macd"]
-boll   = ind["bollinger"]
-rsi    = ind["rsi"]
-ema50  = ind["ema50"]
-ema200 = ind["ema200"]
+    curr   = price_data["current_price"]
+    chg_up = price_data["change"] >= 0
+    signal = sig["signal"]
+    sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
+    macd   = ind["macd"]
+    boll   = ind["bollinger"]
+    rsi    = ind["rsi"]
+    ema50  = ind["ema50"]
+    ema200 = ind["ema200"]
 
     # Save history
     update_signal_history(ticker, {
