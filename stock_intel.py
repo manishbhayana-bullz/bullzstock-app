@@ -213,7 +213,7 @@ def clean_list(lst):
             pass
     return result
     
-def load_theme_html(theme_name):
+def load_theme_html(theme_name, stock_data=None, signal_data=None, stock_meta=None, timeframe=None):
     theme_map = {
         "Neon UI": "pages/bullzstock_v2.html",
         "Terminator UI": "pages/bullzstock_professional_ui.html"
@@ -222,7 +222,28 @@ def load_theme_html(theme_name):
     file_path = theme_map.get(theme_name)
 
     with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+        html = f.read()
+
+    if stock_data and signal_data and stock_meta:
+        replacements = {
+            "{{TICKER}}": stock_meta["ticker"],
+            "{{FULL_NAME}}": stock_meta["fullName"],
+            "{{PRICE}}": f"₹{stock_data['current_price']:.2f}",
+            "{{CHANGE}}": f"{stock_data['change']:.2f}",
+            "{{CHANGE_PCT}}": f"{stock_data['change_pct']:.2f}%",
+            "{{OPEN}}": f"₹{stock_data['open']:.2f}",
+            "{{HIGH}}": f"₹{stock_data['high']:.2f}",
+            "{{LOW}}": f"₹{stock_data['low']:.2f}",
+            "{{SIGNAL}}": signal_data["signal"],
+            "{{TARGET}}": f"₹{signal_data['target_price']:.2f}",
+            "{{STOPLOSS}}": f"₹{signal_data['stop_loss']:.2f}",
+            "{{TIMEFRAME}}": timeframe
+        }
+
+        for key, value in replacements.items():
+            html = html.replace(key, str(value))
+
+    return html
 
 # ── Technical Indicators ──────────────────────────────────────
 def calc_rsi(closes, period=14):
