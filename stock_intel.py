@@ -8,6 +8,7 @@ All signal logic preserved. UI overhauled for portfolio-grade presentation.
 import math
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from datetime import datetime
 import os
 import tempfile
@@ -35,109 +36,112 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+with open("pages/bullzstock_professional_ui.html", "r", encoding="utf-8") as f:
+    html = f.read()
 
+components.html(html, height=1600, scrolling=True)
 
 # ── BullzStock Dark Fintech Theme (locked, not theme-dependent) ──
-st.markdown("""
-<style>
-  /* ── Force dark background on main app area ── */
-  .stApp, .stApp > div { background-color: #0d1117 !important; }
-  section[data-testid="stSidebar"] { background-color: #010409 !important; border-right: 1px solid #21262d; }
-  section[data-testid="stSidebar"] * { color: #c9d1d9 !important; }
-  .stApp p, .stApp li, .stApp label { color: #c9d1d9 !important; }
-  h1, h2, h3, h4 { color: #e6edf3 !important; }
+# st.markdown("""
+# <style>
+#   /* ── Force dark background on main app area ── */
+#   .stApp, .stApp > div { background-color: #0d1117 !important; }
+#   section[data-testid="stSidebar"] { background-color: #010409 !important; border-right: 1px solid #21262d; }
+#   section[data-testid="stSidebar"] * { color: #c9d1d9 !important; }
+#   .stApp p, .stApp li, .stApp label { color: #c9d1d9 !important; }
+#   h1, h2, h3, h4 { color: #e6edf3 !important; }
 
-  /* ── Metric card ── */
-  .mb-card {
-    background: #161b22;
-    border: 1px solid #21262d;
-    border-radius: 10px;
-    padding: 14px 16px;
-    text-align: center;
-  }
-  .mb-card:hover { border-color: #388bfd44; }
-  .mb-card-label {
-    font-size: 10px;
-    color: #8b949e;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 4px;
-  }
-  .mb-card-value { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
-  .mb-card-sub   { font-size: 11px; color: #8b949e; margin-top: 3px; }
+#   /* ── Metric card ── */
+#   .mb-card {
+#     background: #161b22;
+#     border: 1px solid #21262d;
+#     border-radius: 10px;
+#     padding: 14px 16px;
+#     text-align: center;
+#   }
+#   .mb-card:hover { border-color: #388bfd44; }
+#   .mb-card-label {
+#     font-size: 10px;
+#     color: #8b949e;
+#     font-weight: 700;
+#     text-transform: uppercase;
+#     letter-spacing: 0.08em;
+#     margin-bottom: 4px;
+#   }
+#   .mb-card-value { font-size: 20px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+#   .mb-card-sub   { font-size: 11px; color: #8b949e; margin-top: 3px; }
 
-  /* ── Signal box ── */
-  .signal-box { border-radius: 12px; padding: 20px 24px; margin-bottom: 1rem; }
-  .vote-item  { font-size: 12px; padding: 3px 0; color: #c9d1d9; }
+#   /* ── Signal box ── */
+#   .signal-box { border-radius: 12px; padding: 20px 24px; margin-bottom: 1rem; }
+#   .vote-item  { font-size: 12px; padding: 3px 0; color: #c9d1d9; }
 
-  /* ── Reasoning box ── */
-  .reasoning-box {
-    border-radius: 10px; padding: 16px 20px; margin: 8px 0;
-    background: #161b22; border: 1px solid #21262d;
-    font-size: 13px; line-height: 1.7; color: #c9d1d9;
-  }
+#   /* ── Reasoning box ── */
+#   .reasoning-box {
+#     border-radius: 10px; padding: 16px 20px; margin: 8px 0;
+#     background: #161b22; border: 1px solid #21262d;
+#     font-size: 13px; line-height: 1.7; color: #c9d1d9;
+#   }
 
-  /* ── Indicator rows ── */
-  .ind-row {
-    display: flex; justify-content: space-between;
-    padding: 7px 0;
-    border-bottom: 1px solid #21262d;
-    font-size: 12.5px; color: #c9d1d9;
-  }
-  .ind-label { color: #8b949e; font-size: 12px; }
+#   /* ── Indicator rows ── */
+#   .ind-row {
+#     display: flex; justify-content: space-between;
+#     padding: 7px 0;
+#     border-bottom: 1px solid #21262d;
+#     font-size: 12.5px; color: #c9d1d9;
+#   }
+#   .ind-label { color: #8b949e; font-size: 12px; }
 
-  /* ── Sidebar stock card ── */
-  .sb-stock-card {
-    background: #161b22; border-radius: 8px;
-    padding: 10px 14px; margin: 8px 0;
-    border-left: 3px solid #238636; font-size: 12px; color: #c9d1d9;
-  }
+#   /* ── Sidebar stock card ── */
+#   .sb-stock-card {
+#     background: #161b22; border-radius: 8px;
+#     padding: 10px 14px; margin: 8px 0;
+#     border-left: 3px solid #238636; font-size: 12px; color: #c9d1d9;
+#   }
 
-  /* ── Visual metric cards ── */
-  .vm-card {
-    border-radius: 10px; padding: 14px 10px 10px;
-    text-align: center;
-    border: 1px solid #21262d; background: #161b22;
-  }
-  .vm-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
-               letter-spacing: 0.07em; color: #8b949e; margin-bottom: 6px; }
-  .vm-value { font-size: 22px; font-weight: 800; margin: 4px 0 2px; letter-spacing: -0.01em; }
-  .vm-sub   { font-size: 11px; color: #8b949e; }
+#   /* ── Visual metric cards ── */
+#   .vm-card {
+#     border-radius: 10px; padding: 14px 10px 10px;
+#     text-align: center;
+#     border: 1px solid #21262d; background: #161b22;
+#   }
+#   .vm-label { font-size: 10px; font-weight: 700; text-transform: uppercase;
+#                letter-spacing: 0.07em; color: #8b949e; margin-bottom: 6px; }
+#   .vm-value { font-size: 22px; font-weight: 800; margin: 4px 0 2px; letter-spacing: -0.01em; }
+#   .vm-sub   { font-size: 11px; color: #8b949e; }
 
-  /* ── Disclaimer ── */
-  .disclaimer {
-    font-size: 11px; color: #8b949e; margin-top: 1rem;
-    padding: 10px 16px; background: #161b22;
-    border: 1px solid #21262d; border-radius: 8px;
-  }
+#   /* ── Disclaimer ── */
+#   .disclaimer {
+#     font-size: 11px; color: #8b949e; margin-top: 1rem;
+#     padding: 10px 16px; background: #161b22;
+#     border: 1px solid #21262d; border-radius: 8px;
+#   }
 
-  /* ── Streamlit button style override ── */
-  div[data-testid="column"] button {
-    border-radius: 20px !important; font-size: 12px !important;
-    background: #21262d !important; border: 1px solid #30363d !important;
-    color: #c9d1d9 !important;
-  }
-  div[data-testid="column"] button:hover {
-    background: #30363d !important; border-color: #58a6ff !important;
-  }
+#   /* ── Streamlit button style override ── */
+#   div[data-testid="column"] button {
+#     border-radius: 20px !important; font-size: 12px !important;
+#     background: #21262d !important; border: 1px solid #30363d !important;
+#     color: #c9d1d9 !important;
+#   }
+#   div[data-testid="column"] button:hover {
+#     background: #30363d !important; border-color: #58a6ff !important;
+#   }
 
-  /* ── Section divider ── */
-  .section-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: #8b949e; padding: 0 0 8px;
-    border-bottom: 1px solid #21262d; margin-bottom: 12px;
-  }
+#   /* ── Section divider ── */
+#   .section-label {
+#     font-size: 10px; font-weight: 700; text-transform: uppercase;
+#     letter-spacing: 0.1em; color: #8b949e; padding: 0 0 8px;
+#     border-bottom: 1px solid #21262d; margin-bottom: 12px;
+#   }
 
-  /* ── Price strip ── */
-  .price-strip {
-    background: #161b22; border: 1px solid #21262d;
-    border-radius: 12px; padding: 16px 24px; margin-bottom: 1.2rem;
-    display: flex; align-items: center;
-    justify-content: space-between; flex-wrap: wrap; gap: 10px;
-  }
-</style>
-""", unsafe_allow_html=True)
+#   /* ── Price strip ── */
+#   .price-strip {
+#     background: #161b22; border: 1px solid #21262d;
+#     border-radius: 12px; padding: 16px 24px; margin-bottom: 1.2rem;
+#     display: flex; align-items: center;
+#     justify-content: space-between; flex-wrap: wrap; gap: 10px;
+#   }
+# </style>
+# """, unsafe_allow_html=True) 
 
 # ── Config ────────────────────────────────────────────────────
 AV_KEY   = ""
