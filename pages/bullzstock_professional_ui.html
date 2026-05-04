@@ -1,0 +1,667 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+
+  :root {
+    --bg: #080c10;
+    --bg1: #0d1219;
+    --bg2: #111820;
+    --bg3: #1a2333;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #e8edf5;
+    --muted: #6b7a94;
+    --green: #00d084;
+    --green-bg: rgba(0,208,132,0.08);
+    --red: #ff4d6a;
+    --red-bg: rgba(255,77,106,0.08);
+    --blue: #4d9fff;
+    --amber: #f5a623;
+    --amber-bg: rgba(245,166,35,0.08);
+    --accent: #4d9fff;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  .bs-app {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 900px;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--bg1);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .sb-logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .sb-logo-mark {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sb-bull {
+    width: 32px; height: 32px;
+    background: var(--green);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .sb-name { font-size: 15px; font-weight: 800; letter-spacing: 0.01em; }
+  .sb-sub { font-size: 9px; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 1px; }
+
+  .sb-section {
+    padding: 12px 20px 4px;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .sb-item {
+    padding: 8px 20px;
+    font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .sb-item.active {
+    color: var(--text);
+    border-left-color: var(--green);
+    background: rgba(0,208,132,0.05);
+  }
+  .sb-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .sb-stock-block {
+    margin: 12px 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .sb-stock-name { font-size: 13px; font-weight: 700; }
+  .sb-stock-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .sb-tf-row {
+    display: flex; gap: 4px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .sb-tf {
+    font-size: 10px; padding: 3px 8px;
+    background: var(--bg3); border-radius: 4px;
+    color: var(--muted); cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .sb-tf.active {
+    background: var(--green-bg);
+    color: var(--green);
+    border-color: rgba(0,208,132,0.3);
+  }
+
+  /* MAIN */
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  .topbar {
+    background: var(--bg1);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topbar-left { display: flex; flex-direction: column; gap: 2px; }
+  .topbar-ticker { font-size: 18px; font-weight: 800; letter-spacing: 0.02em; }
+  .topbar-full { font-size: 11px; color: var(--muted); }
+  .topbar-price-block { display: flex; align-items: baseline; gap: 10px; }
+  .topbar-price {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 26px; font-weight: 600; color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .topbar-chg {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 500; color: var(--red);
+  }
+  .topbar-right { display: flex; gap: 8px; align-items: center; }
+  .badge {
+    font-size: 10px; padding: 4px 10px; border-radius: 20px;
+    font-weight: 600; letter-spacing: 0.05em;
+  }
+  .badge-live { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,208,132,0.25); }
+  .badge-nse { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+
+  .content { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+
+  /* OHLCV row */
+  .ohlcv-row {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .ohlcv-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .ohlcv-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em;
+    margin-bottom: 5px;
+  }
+  .ohlcv-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px; font-weight: 500;
+  }
+  .c-green { color: var(--green); }
+  .c-red { color: var(--red); }
+  .c-blue { color: var(--blue); }
+  .c-amber { color: var(--amber); }
+
+  /* Signal + chart row */
+  .mid-row { display: grid; grid-template-columns: 300px 1fr; gap: 12px; }
+
+  /* Signal card */
+  .signal-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .signal-header {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .signal-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.12em;
+  }
+  .signal-pill {
+    font-size: 11px; padding: 5px 14px; border-radius: 20px;
+    font-weight: 700; letter-spacing: 0.06em;
+  }
+  .pill-wait {
+    background: var(--amber-bg);
+    color: var(--amber);
+    border: 1px solid rgba(245,166,35,0.3);
+  }
+  .pill-buy {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid rgba(0,208,132,0.3);
+  }
+  .signal-regime {
+    font-size: 12px; color: var(--muted);
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .signal-regime span { color: var(--amber); font-weight: 600; }
+
+  .trade-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .trade-cell {
+    background: var(--bg3);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .trade-cell-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .trade-cell-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px; font-weight: 600;
+  }
+  .trade-cell-sub {
+    font-size: 10px; margin-top: 2px;
+  }
+
+  .votes-block { display: flex; flex-direction: column; gap: 5px; }
+  .vote-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted);
+  }
+  .vote-icon { width: 14px; height: 14px; border-radius: 3px; display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0; }
+  .vi-bull { background: var(--green-bg); color: var(--green); }
+  .vi-bear { background: var(--red-bg); color: var(--red); }
+  .vi-neut { background: var(--bg3); color: var(--muted); }
+
+  /* Mini chart area */
+  .chart-area {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .chart-topbar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chart-pill {
+    font-size: 10px; padding: 3px 10px; border-radius: 20px;
+    background: var(--bg3); color: var(--muted);
+    cursor: pointer; border: 1px solid transparent;
+  }
+  .chart-pill.active {
+    background: var(--green-bg); color: var(--green);
+    border-color: rgba(0,208,132,0.2);
+  }
+  .chart-label { font-size: 10px; color: var(--muted); margin-left: auto; }
+  .chart-canvas-wrap { flex: 1; padding: 12px 16px 8px; position: relative; min-height: 200px; }
+
+  /* Metrics row */
+  .metrics-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .metric-label {
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em;
+  }
+  .gauge-wrap { position: relative; height: 56px; }
+  .gauge-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px; font-weight: 600;
+  }
+  .gauge-sub { font-size: 10px; color: var(--muted); }
+
+  /* Indicators block */
+  .ind-row2 {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .ind-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .ind-panel-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .ind-line {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 11px;
+  }
+  .ind-line:last-child { border-bottom: none; }
+  .ind-key { color: var(--muted); }
+  .ind-val { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+  .ind-badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;
+    font-weight: 600;
+  }
+  .ib-bull { background: var(--green-bg); color: var(--green); }
+  .ib-bear { background: var(--red-bg); color: var(--red); }
+  .ib-neut { background: var(--bg3); color: var(--muted); }
+  .ib-warn { background: var(--amber-bg); color: var(--amber); }
+
+  /* History table */
+  .hist-panel {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .hist-title {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--muted); margin-bottom: 10px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  }
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .hist-table th {
+    text-align: left; padding: 4px 8px;
+    font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 600;
+  }
+  .hist-table td {
+    padding: 7px 8px; border-top: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+  }
+  .hist-table tr:hover td { background: var(--bg3); }
+
+  /* Disclaimer */
+  .disclaimer {
+    font-size: 10px; color: var(--muted);
+    padding: 10px 14px;
+    background: var(--bg1);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    line-height: 1.6;
+  }
+</style>
+
+<div class="bs-app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-mark">
+        <div class="sb-bull">🐂</div>
+        <div>
+          <div class="sb-name">BullzStock</div>
+          <div class="sb-sub">NSE India · Signal Engine</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-section">Navigation</div>
+    <div class="sb-item active"><div class="sb-dot"></div> Stock Intel</div>
+    <div class="sb-item"><div class="sb-dot"></div> Screener</div>
+
+    <div class="sb-section" style="margin-top:12px">Filter by Industry</div>
+    <div class="sb-item active"><div class="sb-dot"></div> All Sectors</div>
+    <div class="sb-item"><div class="sb-dot"></div> IT</div>
+    <div class="sb-item"><div class="sb-dot"></div> Banking</div>
+    <div class="sb-item"><div class="sb-dot"></div> Auto</div>
+    <div class="sb-item"><div class="sb-dot"></div> Pharma</div>
+
+    <div class="sb-stock-block">
+      <div class="sb-stock-name">PFOCUS</div>
+      <div class="sb-stock-meta">Photon Infotech Focus · IT</div>
+      <div class="sb-tf-row">
+        <div class="sb-tf">1D</div>
+        <div class="sb-tf">1W</div>
+        <div class="sb-tf active">1M</div>
+        <div class="sb-tf">6M</div>
+        <div class="sb-tf">6-9M</div>
+      </div>
+    </div>
+
+    <div style="margin-top:auto; padding: 16px 16px 0; border-top: 1px solid var(--border);">
+      <div style="font-size:10px; color:var(--muted); line-height:1.8;">
+        <div style="color:var(--text);font-weight:600;margin-bottom:4px;font-size:11px">NSE Hours</div>
+        Mon–Fri · 9:15 AM – 3:30 PM IST<br>
+        <div style="color:var(--text);font-weight:600;margin:8px 0 4px;font-size:11px">Data Source</div>
+        Yahoo Finance
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:3px">Signal · 1 Month · Sideways/Ranging</div>
+        <div class="topbar-price-block">
+          <div class="topbar-price mono">₹308.15</div>
+          <div class="topbar-chg">▼ ₹6.15 (1.96%)</div>
+        </div>
+        <div class="topbar-full">Photon Infotech Focus · NSE · Prev close ₹314.30</div>
+      </div>
+      <div class="topbar-right">
+        <div style="font-size:10px;color:var(--muted)">09:34 IST · Yahoo Finance</div>
+        <div class="badge badge-live">● Live</div>
+        <div class="badge badge-nse">NSE</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- OHLCV -->
+      <div class="ohlcv-row">
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">Open</div>
+          <div class="ohlcv-value mono">₹313.00</div>
+        </div>
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">High</div>
+          <div class="ohlcv-value c-green mono">₹317.40</div>
+        </div>
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">Low</div>
+          <div class="ohlcv-value c-red mono">₹307.05</div>
+        </div>
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">Volume</div>
+          <div class="ohlcv-value mono">4.5L</div>
+        </div>
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">52W High</div>
+          <div class="ohlcv-value c-green mono">₹367.00</div>
+        </div>
+        <div class="ohlcv-card">
+          <div class="ohlcv-label">52W Low</div>
+          <div class="ohlcv-value c-red mono">₹92.01</div>
+        </div>
+      </div>
+
+      <!-- SIGNAL + CHART -->
+      <div class="mid-row">
+
+        <!-- Signal Card -->
+        <div class="signal-card">
+          <div class="signal-header">
+            <div>
+              <div class="signal-label">Signal · 1 Month</div>
+              <div style="font-size:22px;font-weight:800;margin-top:4px;color:var(--amber)">◌ WAIT</div>
+            </div>
+            <div class="signal-pill pill-wait">8% bearish</div>
+          </div>
+
+          <div class="signal-regime">Regime: <span>Sideways / Ranging</span></div>
+
+          <div class="trade-grid">
+            <div class="trade-cell">
+              <div class="trade-cell-label">Entry</div>
+              <div class="trade-cell-value c-blue">₹309.95</div>
+              <div class="trade-cell-sub" style="color:var(--muted)">Buy zone</div>
+            </div>
+            <div class="trade-cell">
+              <div class="trade-cell-label">Target</div>
+              <div class="trade-cell-value c-green">₹328.04</div>
+              <div class="trade-cell-sub c-green">+5.8%</div>
+            </div>
+            <div class="trade-cell">
+              <div class="trade-cell-label">Stop Loss</div>
+              <div class="trade-cell-value c-red">₹295.48</div>
+              <div class="trade-cell-sub c-red">−4.6%</div>
+            </div>
+            <div class="trade-cell">
+              <div class="trade-cell-label">Hold</div>
+              <div class="trade-cell-value" style="font-size:12px;">1–5 days</div>
+              <div class="trade-cell-sub" style="color:var(--muted)">Short term</div>
+            </div>
+          </div>
+
+          <div class="votes-block">
+            <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Indicator Votes</div>
+            <div class="vote-row"><div class="vote-icon vi-bull">▲</div>RSI 41.4 — Mildly Oversold (Bullish)</div>
+            <div class="vote-row"><div class="vote-icon vi-bear">▼</div>Death Cross confirmed (Bearish)</div>
+            <div class="vote-row"><div class="vote-icon vi-bear">▼</div>BB %b 11.4% — Near lower band</div>
+            <div class="vote-row"><div class="vote-icon vi-bear">▼</div>Strong Downtrend confirmed</div>
+            <div class="vote-row"><div class="vote-icon vi-bull">▲</div>Stochastic K 15.5 — Oversold</div>
+          </div>
+
+          <div style="background:var(--bg3);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--muted);line-height:1.7;border-left:2px solid var(--amber)">
+            📌 Insufficient directional conviction across indicators.<br>
+            📌 Consider waiting for RSI breakout or MACD crossover.
+          </div>
+        </div>
+
+        <!-- Chart placeholder -->
+        <div class="chart-area">
+          <div class="chart-topbar">
+            <div style="font-size:11px;font-weight:700">PFOCUS</div>
+            <div class="chart-pill active">EMA 50</div>
+            <div class="chart-pill">EMA 200</div>
+            <div class="chart-pill">Bollinger</div>
+            <div class="chart-label">Daily · Last 6 months · Plotly</div>
+          </div>
+          <div class="chart-canvas-wrap">
+            <svg viewBox="0 0 520 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:190px">
+              <defs>
+                <linearGradient id="gb" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#4d9fff" stop-opacity="0.12"/>
+                  <stop offset="100%" stop-color="#4d9fff" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- price area bg -->
+              <path d="M0,140 L30,130 L60,125 L90,100 L120,110 L150,90 L180,80 L210,95 L240,85 L270,70 L300,80 L330,75 L360,65 L390,80 L420,95 L450,110 L480,105 L520,120 L520,200 L0,200Z" fill="url(#gb)"/>
+              <!-- BB upper -->
+              <path d="M0,100 L30,92 L60,88 L90,60 L120,70 L150,48 L180,38 L210,55 L240,44 L270,30 L300,42 L330,36 L360,28 L390,40 L420,58 L450,72 L480,66 L520,82" fill="none" stroke="#4d9fff" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.4"/>
+              <!-- BB lower -->
+              <path d="M0,180 L30,168 L60,162 L90,140 L120,150 L150,130 L180,120 L210,138 L240,126 L270,108 L300,118 L330,114 L360,102 L390,118 L420,136 L450,148 L480,144 L520,158" fill="none" stroke="#4d9fff" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.4"/>
+              <!-- EMA 50 -->
+              <path d="M0,160 L30,152 L60,145 L90,128 L120,132 L150,115 L180,104 L210,118 L240,108 L270,94 L300,100 L330,95 L360,86 L390,98 L420,114 L450,126 L480,120 L520,134" fill="none" stroke="#00d084" stroke-width="1.5" opacity="0.7"/>
+              <!-- EMA 200 -->
+              <path d="M0,175 L30,170 L60,166 L90,155 L120,158 L150,148 L180,140 L210,150 L240,144 L270,136 L300,140 L330,137 L360,130 L390,138 L420,148 L450,156 L480,152 L520,160" fill="none" stroke="#f5a623" stroke-width="1.5" opacity="0.7"/>
+              <!-- price line -->
+              <path d="M0,140 L30,130 L60,125 L90,100 L120,110 L150,90 L180,80 L210,95 L240,85 L270,70 L300,80 L330,75 L360,65 L390,80 L420,95 L450,110 L480,105 L520,120" fill="none" stroke="#e8edf5" stroke-width="1.8"/>
+              <!-- volume bars -->
+              <rect x="0" y="185" width="8" height="12" fill="#4d9fff" opacity="0.3"/>
+              <rect x="30" y="183" width="8" height="14" fill="#4d9fff" opacity="0.3"/>
+              <rect x="60" y="186" width="8" height="11" fill="#4d9fff" opacity="0.3"/>
+              <rect x="90" y="180" width="8" height="17" fill="#4d9fff" opacity="0.3"/>
+              <rect x="120" y="184" width="8" height="13" fill="#4d9fff" opacity="0.3"/>
+              <rect x="150" y="181" width="8" height="16" fill="#4d9fff" opacity="0.3"/>
+              <rect x="180" y="182" width="8" height="15" fill="#4d9fff" opacity="0.3"/>
+              <!-- axis labels -->
+              <text x="0" y="198" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94">Dec 25</text>
+              <text x="130" y="198" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94">Feb 26</text>
+              <text x="280" y="198" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94">Mar 26</text>
+              <text x="430" y="198" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94">Apr 26</text>
+              <text x="510" y="10" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94" text-anchor="end">₹367</text>
+              <text x="510" y="120" font-family="IBM Plex Mono" font-size="7" fill="#6b7a94" text-anchor="end">₹308</text>
+              <!-- current price marker -->
+              <circle cx="520" cy="120" r="4" fill="#ff4d6a"/>
+              <line x1="0" x2="520" y1="120" y2="120" stroke="#ff4d6a" stroke-width="0.5" stroke-dasharray="3,4" opacity="0.5"/>
+            </svg>
+            <div style="display:flex;gap:12px;margin-top:4px">
+              <span style="font-size:9px;color:var(--muted);display:flex;align-items:center;gap:4px"><span style="width:14px;height:2px;background:var(--text);display:inline-block;opacity:0.6"></span>Price</span>
+              <span style="font-size:9px;color:var(--green);display:flex;align-items:center;gap:4px"><span style="width:14px;height:2px;background:var(--green);display:inline-block;opacity:0.7"></span>EMA 50</span>
+              <span style="font-size:9px;color:var(--amber);display:flex;align-items:center;gap:4px"><span style="width:14px;height:2px;background:var(--amber);display:inline-block;opacity:0.7"></span>EMA 200</span>
+              <span style="font-size:9px;color:var(--blue);display:flex;align-items:center;gap:4px"><span style="width:14px;height:1px;background:var(--blue);display:inline-block;border-top:1px dashed var(--blue);opacity:0.6"></span>BB Band</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- METRICS ROW -->
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-label">RSI (14)</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 100 55" style="width:100%;height:55px">
+              <path d="M10 50 A40 40 0 0 1 90 50" fill="none" stroke="#1a2333" stroke-width="8" stroke-linecap="round"/>
+              <path d="M10 50 A40 40 0 0 1 55 12" fill="none" stroke="#f5a623" stroke-width="8" stroke-linecap="round"/>
+              <line x1="50" y1="50" x2="43" y2="18" stroke="#f5a623" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="3" fill="#f5a623"/>
+            </svg>
+          </div>
+          <div class="gauge-val c-amber mono">41.4</div>
+          <div class="gauge-sub">Neutral</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Success Prob.</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 100 55" style="width:100%;height:55px">
+              <path d="M10 50 A40 40 0 0 1 90 50" fill="none" stroke="#1a2333" stroke-width="8" stroke-linecap="round"/>
+              <path d="M10 50 A40 40 0 0 1 60 14" fill="none" stroke="#f5a623" stroke-width="8" stroke-linecap="round"/>
+              <line x1="50" y1="50" x2="56" y2="16" stroke="#f5a623" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="50" cy="50" r="3" fill="#f5a623"/>
+            </svg>
+          </div>
+          <div class="gauge-val c-amber mono">48%</div>
+          <div class="gauge-sub">Moderate</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Risk : Reward</div>
+          <div class="gauge-wrap" style="display:flex;align-items:center;justify-content:center;height:55px">
+            <svg viewBox="0 0 60 60" style="width:60px;height:60px">
+              <circle cx="30" cy="30" r="22" fill="none" stroke="#ff4d6a" stroke-width="7" stroke-dasharray="34.5 103.7" stroke-dashoffset="0" transform="rotate(-90 30 30)"/>
+              <circle cx="30" cy="30" r="22" fill="none" stroke="#00d084" stroke-width="7" stroke-dasharray="43.2 103.7" stroke-dashoffset="-34.5" transform="rotate(-90 30 30)"/>
+              <text x="30" y="27" text-anchor="middle" font-family="IBM Plex Mono" font-size="6.5" fill="#e8edf5" font-weight="600">1:1.25</text>
+              <text x="30" y="37" text-anchor="middle" font-family="IBM Plex Mono" font-size="5.5" fill="#6b7a94">R:R</text>
+            </svg>
+          </div>
+          <div class="gauge-val mono" style="font-size:16px;">1 : 1.25</div>
+          <div class="gauge-sub">Fair 1–2x</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Period Return</div>
+          <div class="gauge-wrap">
+            <svg viewBox="0 0 100 45" style="width:100%;height:45px">
+              <polyline points="0,30 12,32 24,28 36,35 48,25 60,30 72,38 84,42 100,36" fill="none" stroke="#ff4d6a" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="gauge-val c-red mono">−8.11%</div>
+          <div class="gauge-sub">Negative over period</div>
+        </div>
+      </div>
+
+      <!-- INDICATORS + FUNDAMENTALS -->
+      <div class="ind-row2">
+        <div class="ind-panel">
+          <div class="ind-panel-title">Technical Indicators</div>
+          <div class="ind-line"><span class="ind-key">RSI (14)</span><span class="ind-val">41.43<span class="ind-badge ib-neut">Neutral</span></span></div>
+          <div class="ind-line"><span class="ind-key">MACD Histogram</span><span class="ind-val">—<span class="ind-badge ib-bear">Bearish ▼</span></span></div>
+          <div class="ind-line"><span class="ind-key">Bollinger %b</span><span class="ind-val">11.4%<span class="ind-badge ib-warn">Near Lower</span></span></div>
+          <div class="ind-line"><span class="ind-key">EMA 50</span><span class="ind-val">₹325.89<span class="ind-badge ib-bear">Below EMA50</span></span></div>
+          <div class="ind-line"><span class="ind-key">EMA 200</span><span class="ind-val">₹325.89<span class="ind-badge ib-bear">Death Cross ▼</span></span></div>
+          <div class="ind-line"><span class="ind-key">ATR (14)</span><span class="ind-val">₹18.09 <span style="color:var(--muted);font-size:10px">Volatility</span></span></div>
+          <div class="ind-line"><span class="ind-key">Stochastic K</span><span class="ind-val">15.5<span class="ind-badge ib-bull">Oversold</span></span></div>
+          <div class="ind-line"><span class="ind-key">Volume Trend</span><span class="ind-val">Falling (−30%)</span></div>
+          <div class="ind-line"><span class="ind-key">Trend</span><span class="ind-val" style="color:var(--red)">Strong Downtrend</span></div>
+          <div class="ind-line"><span class="ind-key">Candlestick</span><span class="ind-val">Bearish Engulfing</span></div>
+        </div>
+        <div class="ind-panel">
+          <div class="ind-panel-title">Fundamentals · Yahoo Finance</div>
+          <div class="ind-line"><span class="ind-key">P/E Ratio</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">EPS</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">Market Cap</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">Debt / Equity</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">ROE</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">Dividend Yield</span><span class="ind-val">—</span></div>
+          <div class="ind-line"><span class="ind-key">52W High</span><span class="ind-val c-green">₹367.00</span></div>
+          <div class="ind-line"><span class="ind-key">52W Low</span><span class="ind-val c-red">₹92.01</span></div>
+          <div class="ind-line"><span class="ind-key">Period Return</span><span class="ind-val c-red">−8.11% ▼</span></div>
+          <div class="ind-line"><span class="ind-key">Data Source</span><span class="ind-val">Yahoo Finance</span></div>
+        </div>
+      </div>
+
+      <!-- HISTORY TABLE -->
+      <div class="hist-panel">
+        <div class="hist-title">Signal History · Session · Last 10 analyses</div>
+        <table class="hist-table">
+          <thead>
+            <tr>
+              <th>Time</th><th>TF</th><th>Price</th><th>Signal</th><th>Regime</th><th>Target</th><th>Stop</th><th>Prob</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--muted)">09:34:02</td>
+              <td>1 Month</td>
+              <td>₹308.15 <span style="color:var(--red);font-size:10px">(−1.96%)</span></td>
+              <td><span class="ind-badge ib-warn" style="font-size:10px">◌ WAIT</span></td>
+              <td style="color:var(--muted)">Sideways/Ranging</td>
+              <td class="c-green">₹328.04</td>
+              <td class="c-red">₹295.48</td>
+              <td>48%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- DISCLAIMER -->
+      <div class="disclaimer">
+        ⚠ Data from Yahoo Finance. Signals are rule-based indicator confluence — not financial advice. Always consult a SEBI-registered investment advisor before investing. NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
+      </div>
+
+    </div>
+  </div>
+</div>

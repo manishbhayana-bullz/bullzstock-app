@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BullzStock Intelligence — NSE India</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "primary-container": "#b7f700",
+        "on-primary-fixed": "#141f00",
+        "surface-dim": "#0a0b0d",
+        "surface-container-low": "#111315",
+        "surface-container": "#161819",
+        "surface-container-high": "#1e2022",
+        "on-surface": "#e3e2e2",
+        "error": "#ff4d6a",
+      },
+      fontFamily: { manrope: ["Manrope"], mono: ["IBM Plex Mono"] }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: 'Manrope', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .ms { font-family: 'Material Symbols Outlined'; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; font-size: 20px; line-height: 1; }
+  .ms-fill { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+  /* Stitch glass-card */
+  .glass-card {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .active-glow { box-shadow: 0 0 40px rgba(189,255,0,0.08); }
+  .bullish-glow { box-shadow: 0 0 12px rgba(189,255,0,0.2); }
+  .neon-btn-glow { box-shadow: 0 4px 20px rgba(183,247,0,0.25); }
+
+  /* Stitch glow-trace on SVG paths */
+  .glow-trace { filter: drop-shadow(0 0 6px rgba(189,255,0,0.5)); }
+
+  /* Custom scrollbar (from trading_terminal_1) */
+  .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #292a2a; border-radius: 10px; }
+
+  /* Marquee animation (from trading_terminal_2) */
+  @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+  .animate-marquee { animation: marquee 20s linear infinite; display:flex; gap:2.5rem; }
+
+  /* Signal states */
+  .signal-wait { background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.25); }
+  .signal-buy  { background:rgba(189,255,0,0.06);  border:1px solid rgba(189,255,0,0.25); }
+  .signal-sell { background:rgba(255,77,106,0.08); border:1px solid rgba(255,77,106,0.25); }
+
+  /* Indicator badge */
+  .ib { font-size:9px; padding:2px 6px; border-radius:4px; font-weight:700; letter-spacing:0.04em; margin-left:5px; }
+  .ib-bull { background:rgba(189,255,0,0.1);  color:#BDFF00; }
+  .ib-bear { background:rgba(255,77,106,0.1); color:#ff4d6a; }
+  .ib-neut { background:rgba(255,255,255,0.06); color:#8b949e; }
+  .ib-warn { background:rgba(245,166,35,0.1); color:#f5a623; }
+
+  .ind-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.04); font-size:11px; }
+  .ind-row:last-child { border-bottom:none; }
+
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .live-dot { animation: pulse-dot 1.5s infinite; }
+
+  /* Stitch active-scale */
+  .active\:scale-98:active { transform: scale(0.98); }
+
+  /* tf buttons */
+  .tf-on  { background:rgba(189,255,0,0.1); color:#BDFF00; border:1px solid rgba(189,255,0,0.3); }
+  .tf-off { background:#111315; color:#6b7a94; border:1px solid rgba(255,255,255,0.06); }
+  .tf-off:hover { color:#c9d1d9; }
+
+  /* stock ticker card */
+  .stk { background:#111315; border:1px solid rgba(255,255,255,0.06); border-radius:8px; padding:10px 12px; cursor:pointer; transition:all 0.15s; }
+  .stk:hover { border-color:rgba(189,255,0,0.3); }
+  .stk.active { border-color:rgba(189,255,0,0.5); background:rgba(189,255,0,0.03); }
+</style>
+</head>
+
+<body class="bg-surface-dim text-on-surface overflow-hidden h-screen flex">
+
+<!-- ═══════════════════════════════════════════════════
+     SIDEBAR  (faithful to bullzstock_trading_terminal_1 + asset_detail)
+════════════════════════════════════════════════════ -->
+<aside class="fixed left-0 top-0 h-full w-64 bg-zinc-950 border-r border-white/5 flex flex-col z-50 overflow-y-auto shadow-2xl shadow-black">
+
+  <!-- Logo block -->
+  <div class="p-6 flex items-center gap-3 border-b border-white/5">
+    <div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-xl">🐂</div>
+    <div>
+      <h1 class="text-xl font-black text-lime-400 tracking-tighter">BullzStock</h1>
+      <p class="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mt-0.5">NSE India · Signal Engine</p>
+    </div>
+  </div>
+
+  <!-- Nav links -->
+  <nav class="mt-4 space-y-0.5 px-2">
+    <a href="#" class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:bg-zinc-900/50 hover:text-zinc-200 transition-all rounded active:scale-98">
+      <span class="ms">dashboard</span>
+      <span class="font-semibold text-xs uppercase tracking-widest">Dashboard</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-4 py-3 bg-zinc-900 text-lime-400 border-r-2 border-lime-400 font-semibold rounded active:scale-98">
+      <span class="ms ms-fill">show_chart</span>
+      <span class="font-semibold text-xs uppercase tracking-widest">Stock Intel</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:bg-zinc-900/50 hover:text-zinc-200 transition-all rounded active:scale-98">
+      <span class="ms">search_insights</span>
+      <span class="font-semibold text-xs uppercase tracking-widest">Screener</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:bg-zinc-900/50 hover:text-zinc-200 transition-all rounded active:scale-98">
+      <span class="ms">analytics</span>
+      <span class="font-semibold text-xs uppercase tracking-widest">Analytics</span>
+    </a>
+    <a href="#" class="flex items-center gap-3 px-4 py-3 text-zinc-500 hover:bg-zinc-900/50 hover:text-zinc-200 transition-all rounded active:scale-98">
+      <span class="ms">receipt_long</span>
+      <span class="font-semibold text-xs uppercase tracking-widest">Orders</span>
+    </a>
+  </nav>
+
+  <!-- Stock selector -->
+  <div class="px-4 mt-5">
+    <p class="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-600 mb-2 px-1">Select Stock</p>
+    <div class="space-y-1.5" id="stockList">
+      <div class="stk active" onclick="selectStock(this,'PFOCUS','Photon Infotech','308.15','-1.96','bear','WAIT','1M')">
+        <div class="flex justify-between"><div><div class="text-xs font-bold">PFOCUS</div><div class="text-[10px] text-zinc-500">Photon Infotech</div></div>
+        <div class="text-right"><div class="text-xs mono font-semibold text-error">₹308.15</div><div class="text-[10px] text-error">−1.96%</div></div></div>
+      </div>
+      <div class="stk" onclick="selectStock(this,'BAJAJ-AUTO','Bajaj Auto','9994','4.6','bull','BUY','1M')">
+        <div class="flex justify-between"><div><div class="text-xs font-bold">BAJAJ-AUTO</div><div class="text-[10px] text-zinc-500">Bajaj Auto Ltd</div></div>
+        <div class="text-right"><div class="text-xs mono font-semibold text-lime-400">₹9,994</div><div class="text-[10px] text-lime-400">+4.6%</div></div></div>
+      </div>
+      <div class="stk" onclick="selectStock(this,'RELIANCE','Reliance Ind','1430','6.5','bull','BUY','1M')">
+        <div class="flex justify-between"><div><div class="text-xs font-bold">RELIANCE</div><div class="text-[10px] text-zinc-500">Reliance Industries</div></div>
+        <div class="text-right"><div class="text-xs mono font-semibold text-lime-400">₹1,430</div><div class="text-[10px] text-lime-400">+6.5%</div></div></div>
+      </div>
+      <div class="stk" onclick="selectStock(this,'HDFCBANK','HDFC Bank','1680','2.1','bull','HOLD','1W')">
+        <div class="flex justify-between"><div><div class="text-xs font-bold">HDFCBANK</div><div class="text-[10px] text-zinc-500">HDFC Bank Ltd</div></div>
+        <div class="text-right"><div class="text-xs mono font-semibold text-lime-400">₹1,680</div><div class="text-[10px] text-lime-400">+2.1%</div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeframe (from trading_terminal_1 style) -->
+  <div class="px-4 mt-4">
+    <p class="text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-600 mb-2 px-1">Timeframe</p>
+    <div class="flex flex-wrap gap-1.5" id="tfGroup">
+      <button onclick="setTf(this,'1D')" class="tf-btn tf-off text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest">1D</button>
+      <button onclick="setTf(this,'1W')" class="tf-btn tf-off text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest">1W</button>
+      <button onclick="setTf(this,'1M')" class="tf-btn tf-on  text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest">1M</button>
+      <button onclick="setTf(this,'6M')" class="tf-btn tf-off text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest">6M</button>
+      <button onclick="setTf(this,'6-9M')" class="tf-btn tf-off text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-widest">6-9M</button>
+    </div>
+  </div>
+
+  <!-- Analyse CTA (from trading_terminal_1) -->
+  <div class="px-4 mt-5">
+    <button onclick="runAnalysis()" id="analyseBtn"
+      class="w-full py-3 bg-primary-container text-on-primary-fixed font-black text-xs uppercase tracking-widest rounded-lg hover:brightness-110 active:scale-95 transition-all neon-btn-glow">
+      ⚡ Analyse Now
+    </button>
+  </div>
+
+  <!-- Footer info -->
+  <div class="mt-auto border-t border-white/5 p-5 space-y-1">
+    <a href="#" class="flex items-center gap-3 px-2 py-2 text-zinc-500 hover:text-zinc-200 text-[10px] uppercase tracking-widest font-semibold transition-all">
+      <span class="ms" style="font-size:16px">help</span> Support
+    </a>
+    <a href="#" class="flex items-center gap-3 px-2 py-2 text-zinc-500 hover:text-error text-[10px] uppercase tracking-widest font-semibold transition-all">
+      <span class="ms" style="font-size:16px">logout</span> Sign Out
+    </a>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════
+     MAIN CONTENT SHELL
+════════════════════════════════════════════════════ -->
+<main class="ml-64 flex flex-col h-screen overflow-hidden flex-1">
+
+  <!-- TOP APP BAR (from bullzstock_trading_terminal_2 + asset_detail) -->
+  <header class="fixed top-0 right-0 left-64 h-16 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5 flex justify-between items-center px-6 z-40">
+    <div class="flex items-center gap-4">
+      <!-- Current stock pill -->
+      <div class="flex items-center gap-2 bg-white/3 px-3 py-1.5 rounded-lg border border-white/6">
+        <span class="w-1.5 h-1.5 rounded-full bg-lime-400 live-dot"></span>
+        <span id="hdr-ticker" class="text-xs font-black text-lime-400 tracking-tight">PFOCUS</span>
+        <span class="text-xs text-zinc-500">Photon Infotech</span>
+        <span id="hdr-price" class="mono text-sm font-semibold text-white">₹308.15</span>
+        <span id="hdr-chg" class="text-xs font-bold text-error">▼ 1.96%</span>
+      </div>
+      <span class="text-[10px] text-zinc-600 mono">09:34 IST · Yahoo Finance</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- Global status (from trading_terminal_2) -->
+      <div class="flex flex-col items-end">
+        <span class="text-[9px] text-zinc-600 uppercase font-bold tracking-widest">Market Status</span>
+        <div class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-lime-400 live-dot"></span>
+          <span class="text-[10px] font-bold text-lime-400">NSE OPEN</span>
+        </div>
+      </div>
+      <button class="p-2 text-zinc-400 hover:text-lime-400 hover:bg-white/5 rounded-lg transition-all"><span class="ms">notifications</span></button>
+      <button class="p-2 text-zinc-400 hover:text-lime-400 hover:bg-white/5 rounded-lg transition-all"><span class="ms">settings</span></button>
+      <div class="flex items-center gap-2 border-l border-white/5 pl-3">
+        <div class="text-right">
+          <p class="text-xs font-bold text-white">Manish B.</p>
+          <p class="text-[9px] text-lime-400 uppercase tracking-tighter">Pro Account</p>
+        </div>
+        <div class="w-8 h-8 rounded-full border border-lime-400/30 bg-zinc-800 flex items-center justify-center text-xs font-black text-lime-400">MB</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- LIVE TICKER STRIP (from trading_terminal_2) -->
+  <div class="mt-16 h-10 border-b border-white/5 bg-zinc-950 flex items-center overflow-hidden whitespace-nowrap px-4 gap-8 flex-shrink-0">
+    <div class="flex items-center gap-2 text-[10px] font-bold text-zinc-500 flex-shrink-0">
+      <span class="ms text-lime-400" style="font-size:14px">bolt</span> NSE LIVE
+    </div>
+    <div class="flex animate-marquee">
+      <div class="flex gap-10">
+        <span class="text-[10px] font-bold text-zinc-300">NIFTY 50 <span class="mono text-lime-400">22,456.80</span> <span class="text-lime-400/70">+0.84%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">SENSEX <span class="mono text-lime-400">73,852.10</span> <span class="text-lime-400/70">+0.76%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">BANKNIFTY <span class="mono text-error">48,210.50</span> <span class="text-error/70">−0.22%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">BAJAJ-AUTO <span class="mono text-lime-400">9,994.00</span> <span class="text-lime-400/70">+4.6%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">RELIANCE <span class="mono text-lime-400">1,430.80</span> <span class="text-lime-400/70">+6.5%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">HDFCBANK <span class="mono text-lime-400">1,680.20</span> <span class="text-lime-400/70">+2.1%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">PFOCUS <span class="mono text-error">308.15</span> <span class="text-error/70">−1.96%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">USDINR <span class="mono text-zinc-300">83.42</span> <span class="text-zinc-500">+0.01%</span></span>
+      </div>
+      <!-- duplicate for seamless loop -->
+      <div class="flex gap-10 ml-10">
+        <span class="text-[10px] font-bold text-zinc-300">NIFTY 50 <span class="mono text-lime-400">22,456.80</span> <span class="text-lime-400/70">+0.84%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">SENSEX <span class="mono text-lime-400">73,852.10</span> <span class="text-lime-400/70">+0.76%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">BANKNIFTY <span class="mono text-error">48,210.50</span> <span class="text-error/70">−0.22%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">BAJAJ-AUTO <span class="mono text-lime-400">9,994.00</span> <span class="text-lime-400/70">+4.6%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">RELIANCE <span class="mono text-lime-400">1,430.80</span> <span class="text-lime-400/70">+6.5%</span></span>
+        <span class="text-[10px] font-bold text-zinc-300">PFOCUS <span class="mono text-error">308.15</span> <span class="text-error/70">−1.96%</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT AREA -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- CENTER: Stock header + chart + history -->
+    <section class="flex-1 flex flex-col overflow-hidden border-r border-white/5">
+
+      <!-- Asset header (from bullzstock_asset_detail) -->
+      <div class="glass-card mx-4 mt-4 rounded-xl p-5 flex items-center justify-between flex-shrink-0">
+        <div class="flex items-center gap-5">
+          <div class="w-14 h-14 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-2xl">📊</div>
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <h2 id="asset-name" class="text-2xl font-black text-white">PFOCUS</h2>
+              <span id="asset-full" class="bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded text-[10px] font-bold tracking-widest uppercase">PHOTON INFOTECH · NSE</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <span id="asset-price" class="text-4xl font-black mono text-white leading-none">₹308.15</span>
+              <div id="asset-chg-block" class="flex items-center gap-1 text-error font-bold">
+                <span class="ms ms-fill" style="font-size:18px" id="asset-arrow">arrow_drop_down</span>
+                <span id="asset-chg">1.96%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- OHLCV row -->
+        <div class="flex gap-5">
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Open</p><p class="text-sm font-semibold mono">₹313.00</p></div>
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">High</p><p class="text-sm font-semibold mono text-lime-400">₹317.40</p></div>
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Low</p><p class="text-sm font-semibold mono text-error">₹307.05</p></div>
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">Volume</p><p class="text-sm font-semibold mono">4.5L</p></div>
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">52W H</p><p class="text-sm font-semibold mono text-lime-400">₹367</p></div>
+          <div class="text-center"><p class="text-[9px] text-zinc-600 uppercase tracking-widest mb-1">52W L</p><p class="text-sm font-semibold mono text-error">₹92</p></div>
+        </div>
+        <!-- CTA buttons (from asset_detail) -->
+        <div class="flex gap-3">
+          <button class="px-5 py-2 rounded-lg border border-zinc-700 text-zinc-300 font-bold text-xs hover:bg-zinc-800 transition-all">Set Alert</button>
+          <button class="px-5 py-2 rounded-lg bg-primary-container text-on-primary-fixed font-black text-xs hover:brightness-110 active:scale-95 transition-all neon-btn-glow">Analyse Now ⚡</button>
+        </div>
+      </div>
+
+      <!-- Chart timeframe controls (from asset_detail) -->
+      <div class="flex items-center gap-2 px-4 py-3 border-b border-white/5 flex-shrink-0" style="background:#090b0c">
+        <div class="flex gap-1">
+          <button class="px-3 py-1.5 rounded text-xs font-bold transition-all hover:bg-zinc-800 text-zinc-500" onclick="setTf(this,'1D')">1D</button>
+          <button class="px-3 py-1.5 rounded text-xs font-bold transition-all hover:bg-zinc-800 text-zinc-500" onclick="setTf(this,'1W')">1W</button>
+          <button class="px-3 py-1.5 rounded bg-zinc-800 text-lime-400 text-xs font-bold" onclick="setTf(this,'1M')">1M</button>
+          <button class="px-3 py-1.5 rounded text-xs font-bold transition-all hover:bg-zinc-800 text-zinc-500" onclick="setTf(this,'6M')">6M</button>
+        </div>
+        <div class="w-px h-4 bg-zinc-800 mx-1"></div>
+        <button class="px-2 py-1 text-[10px] bg-zinc-800/50 text-zinc-400 rounded font-bold hover:text-lime-400 transition-all">EMA 50</button>
+        <button class="px-2 py-1 text-[10px] bg-lime-400/10 text-lime-400 rounded font-bold border border-lime-400/20">EMA 200</button>
+        <button class="px-2 py-1 text-[10px] bg-zinc-800/50 text-zinc-400 rounded font-bold hover:text-blue-400 transition-all">BB Bands</button>
+        <div class="ml-auto flex gap-4 text-[9px] text-zinc-600">
+          <span class="flex items-center gap-1"><span style="display:inline-block;width:12px;height:2px;background:#BDFF00;opacity:0.7;vertical-align:middle"></span>EMA50</span>
+          <span class="flex items-center gap-1"><span style="display:inline-block;width:12px;height:2px;background:#f5a623;opacity:0.7;vertical-align:middle"></span>EMA200</span>
+          <span class="flex items-center gap-1"><span style="display:inline-block;width:12px;height:1px;border-top:1px dashed #4d9fff;opacity:0.7;vertical-align:middle;width:12px"></span>BB</span>
+        </div>
+      </div>
+
+      <!-- Canvas chart -->
+      <div class="flex-1 relative overflow-hidden" style="background:#090b0c;min-height:0">
+        <canvas id="mainChart" style="width:100%;height:100%;display:block"></canvas>
+        <div id="priceTag" class="absolute right-0 text-[9px] font-bold mono px-2 py-0.5 z-10" style="background:#ff4d6a;color:#fff;top:45%">₹308.15</div>
+      </div>
+
+      <!-- Signal history table (from trading_terminal_2 footer style) -->
+      <div class="flex-shrink-0 border-t border-white/5 px-4 py-3" style="background:#0a0c0d">
+        <p class="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-2">🕐 Signal History · Session</p>
+        <table class="w-full text-[10px]">
+          <thead><tr class="text-zinc-600 text-[9px] uppercase tracking-wider border-b border-white/4">
+            <th class="text-left pb-1.5 font-bold">Time</th>
+            <th class="text-left pb-1.5 font-bold">TF</th>
+            <th class="text-left pb-1.5 font-bold">Price</th>
+            <th class="text-left pb-1.5 font-bold">Signal</th>
+            <th class="text-left pb-1.5 font-bold">Regime</th>
+            <th class="text-left pb-1.5 font-bold">Target</th>
+            <th class="text-left pb-1.5 font-bold">Stop</th>
+            <th class="text-left pb-1.5 font-bold">Prob</th>
+          </tr></thead>
+          <tbody id="historyBody">
+            <tr class="border-t border-white/4 hover:bg-white/2 transition-colors">
+              <td class="py-1.5 text-zinc-500 mono">09:34:02</td>
+              <td class="py-1.5 font-semibold">1M</td>
+              <td class="py-1.5 mono">₹308.15 <span class="text-error">(−1.96%)</span></td>
+              <td class="py-1.5"><span class="ib ib-warn" style="font-size:9px;padding:3px 7px">◌ WAIT</span></td>
+              <td class="py-1.5 text-zinc-500">Sideways/Ranging</td>
+              <td class="py-1.5 mono text-lime-400">₹328.04</td>
+              <td class="py-1.5 mono text-error">₹295.48</td>
+              <td class="py-1.5 mono">48%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Signal + Indicators (from asset_detail wealth insights + trading_terminal_1 right panel) -->
+    <aside class="w-80 flex-shrink-0 bg-zinc-950 border-l border-white/5 flex flex-col overflow-y-auto custom-scrollbar">
+
+      <!-- Signal box -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-3">Signal Analysis</p>
+
+        <div id="signalBox" class="signal-wait rounded-xl p-4 mb-3">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <p id="sigTfLabel" class="text-[9px] text-zinc-500 uppercase tracking-widest mb-1">Signal · 1 Month</p>
+              <p id="sigName" class="text-2xl font-black" style="color:#f5a623">◌ WAIT</p>
+            </div>
+            <span id="sigConf" class="text-[10px] font-bold px-3 py-1.5 rounded-full" style="background:rgba(245,166,35,0.12);color:#f5a623">8% bearish</span>
+          </div>
+          <p id="sigRegime" class="text-[10px] text-zinc-500 border-t border-white/5 pt-2">
+            Regime: <span class="font-bold" style="color:#f5a623">Sideways / Ranging</span>
+          </p>
+        </div>
+
+        <!-- Trade levels grid (from trading_terminal_1 risk controls) -->
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="bg-surface-container-low rounded-lg p-3 border border-white/4">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Entry</p>
+            <p class="text-sm font-bold mono text-blue-400">₹309.95</p>
+            <p class="text-[9px] text-zinc-600 mt-0.5">Buy zone</p>
+          </div>
+          <div class="bg-surface-container-low rounded-lg p-3 border border-white/4">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Target</p>
+            <p class="text-sm font-bold mono text-lime-400">₹328.04</p>
+            <p class="text-[9px] text-lime-400 mt-0.5">+5.8%</p>
+          </div>
+          <div class="bg-surface-container-low rounded-lg p-3 border border-white/4">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Stop Loss</p>
+            <p class="text-sm font-bold mono text-error">₹295.48</p>
+            <p class="text-[9px] text-error mt-0.5">−4.6%</p>
+          </div>
+          <div class="bg-surface-container-low rounded-lg p-3 border border-white/4">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Hold</p>
+            <p class="text-sm font-bold">1–5 days</p>
+            <p class="text-[9px] text-zinc-600 mt-0.5">Short term</p>
+          </div>
+        </div>
+
+        <!-- Reasoning (from trading_terminal_1 market sentiment block) -->
+        <div class="bg-surface-container-low rounded-xl p-4 mb-3 border-l-2" style="border-left-color:#f5a623;border-top:1px solid rgba(255,255,255,0.04);border-right:1px solid rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.04)">
+          <p class="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-600 mb-2">💡 Signal Reasoning</p>
+          <p class="text-[10px] text-zinc-400 leading-relaxed">📌 Insufficient directional conviction — indicators split across bullish/bearish zones.</p>
+          <p class="text-[10px] text-zinc-400 leading-relaxed mt-1.5">📌 Wait for RSI breakout above 50 or MACD crossover before entering.</p>
+        </div>
+
+        <!-- Signal intensity bar (from trading_terminal_1) -->
+        <div class="bg-surface-container rounded-xl p-4 border border-white/4">
+          <div class="flex justify-between text-[10px] font-bold uppercase text-zinc-500 mb-3">
+            <span>Signal Intensity</span>
+            <span class="text-amber-400">Weak Bearish</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="h-1.5 flex-1 bg-lime-400/30 rounded-full"></div>
+            <div class="h-1.5 flex-1 bg-zinc-800 rounded-full"></div>
+            <div class="h-1.5 flex-1 bg-zinc-800 rounded-full"></div>
+            <div class="h-1.5 flex-1 bg-error/30 rounded-full"></div>
+            <div class="h-1.5 flex-1 bg-error/60 rounded-full"></div>
+          </div>
+          <div class="flex justify-between text-[9px] text-zinc-600 mt-1.5">
+            <span>Strong Buy</span><span>Strong Sell</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Visual Metrics -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-3">Visual Metrics</p>
+        <div class="grid grid-cols-2 gap-2">
+          <!-- RSI gauge -->
+          <div class="glass-card rounded-xl p-3 text-center">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">RSI (14)</p>
+            <svg viewBox="0 0 80 44" style="width:65px;margin:0 auto;display:block">
+              <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke="#1e2022" stroke-width="7" stroke-linecap="round"/>
+              <path d="M8 40 A32 32 0 0 1 46 10" fill="none" stroke="#f5a623" stroke-width="7" stroke-linecap="round"/>
+              <line x1="40" y1="40" x2="35" y2="14" stroke="#f5a623" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="40" cy="40" r="3" fill="#f5a623"/>
+            </svg>
+            <p class="text-base font-black mono text-amber-400">41.4</p>
+            <p class="text-[9px] text-zinc-600">Neutral</p>
+          </div>
+          <!-- Prob gauge -->
+          <div class="glass-card rounded-xl p-3 text-center">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Success Prob.</p>
+            <svg viewBox="0 0 80 44" style="width:65px;margin:0 auto;display:block">
+              <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke="#1e2022" stroke-width="7" stroke-linecap="round"/>
+              <path d="M8 40 A32 32 0 0 1 50 11" fill="none" stroke="#f5a623" stroke-width="7" stroke-linecap="round"/>
+              <line x1="40" y1="40" x2="46" y2="14" stroke="#f5a623" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="40" cy="40" r="3" fill="#f5a623"/>
+            </svg>
+            <p class="text-base font-black mono text-amber-400">48%</p>
+            <p class="text-[9px] text-zinc-600">Moderate</p>
+          </div>
+          <!-- R:R donut -->
+          <div class="glass-card rounded-xl p-3 text-center">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Risk : Reward</p>
+            <svg viewBox="0 0 56 56" style="width:48px;margin:4px auto 0;display:block">
+              <circle cx="28" cy="28" r="20" fill="none" stroke="#ff4d6a" stroke-width="7" stroke-dasharray="32 126" stroke-dashoffset="0" transform="rotate(-90 28 28)"/>
+              <circle cx="28" cy="28" r="20" fill="none" stroke="#BDFF00" stroke-width="7" stroke-dasharray="40 126" stroke-dashoffset="-32" transform="rotate(-90 28 28)"/>
+              <text x="28" y="25" text-anchor="middle" font-family="IBM Plex Mono" font-size="6" fill="#e3e2e2" font-weight="700">1:1.25</text>
+              <text x="28" y="34" text-anchor="middle" font-family="IBM Plex Mono" font-size="5.5" fill="#6b7a94">R:R</text>
+            </svg>
+            <p class="text-xs font-black mono mt-1">1 : 1.25</p>
+            <p class="text-[9px] text-zinc-600">Fair 1–2x</p>
+          </div>
+          <!-- Sparkline -->
+          <div class="glass-card rounded-xl p-3 text-center">
+            <p class="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">Period Return</p>
+            <svg viewBox="0 0 70 34" style="width:65px;height:34px;display:block;margin:4px auto 0">
+              <polyline points="0,18 10,20 20,14 30,24 40,12 50,22 60,28 70,24" fill="none" stroke="#ff4d6a" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+            <p class="text-base font-black mono text-error">−8.11%</p>
+            <p class="text-[9px] text-zinc-600">Negative period</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Technical Indicators (from asset_detail wealth insights style) -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-3">📐 Technical Indicators</p>
+        <div class="ind-row"><span class="text-zinc-500">RSI (14)</span><span class="mono">41.43<span class="ib ib-neut">Neutral</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">MACD Histogram</span><span class="mono">—<span class="ib ib-bear">Bearish ▼</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">Bollinger %b</span><span class="mono">11.4%<span class="ib ib-warn">Near Lower</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">EMA 50</span><span class="mono text-zinc-300">₹325.89<span class="ib ib-bear">Death Cross</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">EMA 200</span><span class="mono text-zinc-300">₹325.89</span></div>
+        <div class="ind-row"><span class="text-zinc-500">ATR (14)</span><span class="mono text-zinc-300">₹18.09 <span class="text-zinc-600 text-[9px]">Volatility</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">Stochastic K</span><span class="mono">15.5<span class="ib ib-bull">Oversold</span></span></div>
+        <div class="ind-row"><span class="text-zinc-500">Volume Trend</span><span class="mono text-zinc-300">Falling (−30%)</span></div>
+        <div class="ind-row"><span class="text-zinc-500">Trend</span><span class="text-error font-semibold text-xs">Strong Downtrend</span></div>
+        <div class="ind-row"><span class="text-zinc-500">Candlestick</span><span class="text-zinc-300 text-xs">Bearish Engulfing</span></div>
+        <div class="ind-row"><span class="text-zinc-500">Candles Used</span><span class="mono text-zinc-300">20</span></div>
+      </div>
+
+      <!-- AI Commentary -->
+      <div class="p-4 border-b border-white/5">
+        <p class="text-[9px] font-black uppercase tracking-[0.18em] text-zinc-500 mb-3">🤖 AI Commentary</p>
+        <div class="glass-card rounded-xl p-4 border-l-2 border-blue-500/40 text-[10px] text-zinc-400 leading-relaxed">
+          PFOCUS is showing RSI at 41.4 — mildly oversold territory with a confirmed Death Cross indicating structural weakness. Price is compressing near Bollinger lower band. A bounce is possible but not confirmed by momentum. Key risk: break below ₹295.48 invalidates recovery. Wait for MACD crossover near entry ₹309.95 with strict stop discipline.
+        </div>
+        <div class="flex items-center gap-2 mt-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+          <span class="text-[9px] text-zinc-600">Powered by Claude · claude-haiku-4-5</span>
+        </div>
+      </div>
+
+      <!-- Disclaimer (from asset_detail footer) -->
+      <div class="p-4 mt-auto">
+        <p class="text-[9px] text-zinc-600 leading-relaxed glass-card rounded-lg p-3">
+          ⚠ Data from Yahoo Finance. Rule-based signals — <strong class="text-zinc-500">not financial advice</strong>. Always consult a SEBI-registered advisor. NSE: Mon–Fri 9:15 AM – 3:30 PM IST.
+        </p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- SYSTEM FOOTER (from trading_terminal_2) -->
+  <footer class="h-8 bg-zinc-950 border-t border-white/5 flex items-center justify-between px-6 text-[10px] font-bold text-zinc-500 tracking-widest flex-shrink-0">
+    <div class="flex items-center gap-6">
+      <div class="flex items-center gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-lime-400 live-dot"></span>
+        <span>DATA: YAHOO FINANCE</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="ms" style="font-size:12px">speed</span>
+        <span>ENGINE: RULE-BASED · 6 INDICATORS</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="ms" style="font-size:12px">public</span>
+        <span>MARKET: NSE OPEN · 1H 14M LEFT</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <span>VER: 4.0-STABLE</span>
+      <span>© BULLZSTOCK 2025</span>
+    </div>
+  </footer>
+</main>
+
+<script>
+// ═══ CANDLESTICK CHART ═══════════════════════════════════════════════════
+const canvas = document.getElementById('mainChart');
+const ctx    = canvas.getContext('2d');
+
+function resize() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; draw(); }
+
+function draw() {
+  const W = canvas.width, H = canvas.height;
+  if (!W || !H) return;
+  ctx.clearRect(0,0,W,H);
+  const m = {top:30, right:72, bottom:54, left:12};
+  const cw = W-m.left-m.right, ch = H-m.top-m.bottom;
+
+  // background
+  ctx.fillStyle='#090b0c'; ctx.fillRect(0,0,W,H);
+
+  // grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=0.5;
+  for(let i=0;i<=6;i++){const y=m.top+(ch/6)*i;ctx.beginPath();ctx.moveTo(m.left,y);ctx.lineTo(m.left+cw,y);ctx.stroke();}
+  for(let i=0;i<=12;i++){const x=m.left+(cw/12)*i;ctx.beginPath();ctx.moveTo(x,m.top);ctx.lineTo(x,m.top+ch);ctx.stroke();}
+
+  // PFOCUS 20-candle data (realistic Dec25–Apr26 trend: uptrend then reversal)
+  const D=[
+    {o:188,h:196,l:182,c:193},{o:193,h:203,l:189,c:200},{o:200,h:212,l:196,c:208},
+    {o:208,h:220,l:204,c:217},{o:217,h:228,l:212,c:225},{o:225,h:236,l:219,c:232},
+    {o:232,h:242,l:226,c:238},{o:238,h:248,l:230,c:244},{o:244,h:255,l:238,c:250},
+    {o:250,h:262,l:244,c:258},{o:258,h:270,l:252,c:265},{o:265,h:278,l:258,c:272},
+    {o:272,h:285,l:265,c:280},{o:280,h:290,l:270,c:275},{o:275,h:282,l:262,c:268},
+    {o:268,h:275,l:255,c:258},{o:258,h:264,l:244,c:248},{o:248,h:254,l:232,c:238},
+    {o:238,h:316,l:232,c:312},{o:312,h:320,l:304,c:308}
+  ];
+  const allP=D.flatMap(d=>[d.h,d.l]);
+  const minP=Math.min(...allP)*0.975, maxP=Math.max(...allP)*1.015;
+  const sy=p=>m.top+ch-((p-minP)/(maxP-minP))*ch;
+  const n=D.length, gap=cw/n, bw=gap*0.55;
+
+  // BB upper/lower bands
+  const bbU=[200,206,214,224,234,244,250,256,264,274,285,298,308,318,316,312,306,296,330,344];
+  const bbL=[178,184,188,196,202,208,214,218,224,232,240,248,256,260,256,248,238,226,302,296];
+  ctx.strokeStyle='rgba(77,159,255,0.25)'; ctx.lineWidth=0.8; ctx.setLineDash([4,4]);
+  ctx.beginPath(); bbU.forEach((v,i)=>{const x=m.left+i*gap+gap/2;i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));}); ctx.stroke();
+  ctx.beginPath(); bbL.forEach((v,i)=>{const x=m.left+i*gap+gap/2;i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));}); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // EMA 50
+  const e50=[191,196,202,210,218,225,230,236,242,249,256,264,272,278,278,275,270,263,302,310];
+  ctx.strokeStyle='rgba(189,255,0,0.65)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); e50.forEach((v,i)=>{const x=m.left+i*gap+gap/2;i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));}); ctx.stroke();
+
+  // EMA 200
+  const e200=[190,193,197,202,208,214,219,224,229,235,242,249,256,262,265,265,264,260,296,304];
+  ctx.strokeStyle='rgba(245,166,35,0.65)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); e200.forEach((v,i)=>{const x=m.left+i*gap+gap/2;i===0?ctx.moveTo(x,sy(v)):ctx.lineTo(x,sy(v));}); ctx.stroke();
+
+  // Current price dashed line
+  const curY=sy(308);
+  ctx.strokeStyle='rgba(255,77,106,0.4)'; ctx.lineWidth=0.8; ctx.setLineDash([3,4]);
+  ctx.beginPath(); ctx.moveTo(m.left,curY); ctx.lineTo(m.left+cw,curY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Volume bars
+  const vols=[4,5,6,7,5,8,4,5,6,7,8,9,8,6,5,6,4,4,14,5];
+  const maxV=Math.max(...vols), vh=ch*0.12;
+  D.forEach((d,i)=>{
+    const x=m.left+i*gap, isUp=d.c>=d.o;
+    ctx.fillStyle=isUp?'rgba(189,255,0,0.18)':'rgba(255,77,106,0.18)';
+    const barH=(vols[i]/maxV)*vh;
+    ctx.fillRect(x+gap*0.1, m.top+ch-barH, gap*0.8, barH);
+  });
+
+  // Candles
+  D.forEach((d,i)=>{
+    const x=m.left+i*gap+gap/2, isUp=d.c>=d.o;
+    const col=isUp?'#BDFF00':'#ff4d6a';
+    const bTop=sy(Math.max(d.o,d.c)), bBot=sy(Math.min(d.o,d.c));
+    const bodyH=Math.max(bBot-bTop,1);
+    // wick
+    ctx.strokeStyle=col; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x,sy(d.h)); ctx.lineTo(x,sy(d.l)); ctx.stroke();
+    // body (Stitch style: neon green / crimson)
+    ctx.fillStyle=isUp?'rgba(189,255,0,0.75)':'rgba(255,77,106,0.75)';
+    ctx.strokeStyle=col; ctx.lineWidth=0.5;
+    ctx.fillRect(x-bw/2,bTop,bw,bodyH);
+    ctx.strokeRect(x-bw/2,bTop,bw,bodyH);
+    // neon glow on last candle
+    if(i===D.length-1){
+      ctx.shadowColor='#ff4d6a'; ctx.shadowBlur=10;
+      ctx.strokeStyle='#ff4d6a'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(x,sy(d.h)); ctx.lineTo(x,sy(d.l)); ctx.stroke();
+      ctx.shadowBlur=0;
+    }
+  });
+
+  // Price axis
+  ctx.fillStyle='#6b7a94'; ctx.font='10px IBM Plex Mono'; ctx.textAlign='left';
+  for(let i=0;i<=5;i++){
+    const p=minP+((maxP-minP)/5)*i;
+    ctx.fillText('₹'+Math.round(p), m.left+cw+4, sy(p)+3);
+  }
+
+  // Date axis
+  const labels=['Dec 25','','Jan 26','','','Feb 26','','','Mar 26','','','Apr 26','','','','','','','May 26',''];
+  ctx.textAlign='center'; ctx.fillStyle='#6b7a94'; ctx.font='9px IBM Plex Mono';
+  labels.forEach((l,i)=>{if(!l)return; const x=m.left+i*gap+gap/2; ctx.fillText(l,x,m.top+ch+16);});
+
+  // Position price tag
+  const tag=document.getElementById('priceTag');
+  if(tag){tag.style.top=(curY-9)+'px';}
+}
+
+window.addEventListener('resize',()=>{ clearTimeout(window._rt); window._rt=setTimeout(resize,50); });
+setTimeout(resize,150);
+
+// ═══ INTERACTIVITY ═══════════════════════════════════════════════════════
+function selectStock(el,ticker,full,price,chg,dir,signal,tf){
+  document.querySelectorAll('.stk').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  // header
+  document.getElementById('hdr-ticker').textContent=ticker;
+  document.getElementById('hdr-price').textContent='₹'+parseFloat(price).toLocaleString('en-IN');
+  const hChg=document.getElementById('hdr-chg');
+  if(dir==='bull'){hChg.style.color='#BDFF00';hChg.textContent='▲ '+chg+'%';}
+  else{hChg.style.color='#ff4d6a';hChg.textContent='▼ '+chg+'%';}
+  // asset header
+  document.getElementById('asset-name').textContent=ticker;
+  document.getElementById('asset-full').textContent=full.toUpperCase()+' · NSE';
+  document.getElementById('asset-price').textContent='₹'+parseFloat(price).toLocaleString('en-IN');
+  const ab=document.getElementById('asset-chg-block');
+  const aa=document.getElementById('asset-arrow');
+  const ac=document.getElementById('asset-chg');
+  if(dir==='bull'){ab.style.color='#BDFF00';aa.textContent='arrow_drop_up';ac.textContent=chg+'%';}
+  else{ab.style.color='#ff4d6a';aa.textContent='arrow_drop_down';ac.textContent=chg+'%';}
+}
+
+function setTf(el,tf){
+  document.querySelectorAll('#tfGroup .tf-btn').forEach(b=>{b.className=b.className.replace('tf-on','tf-off');});
+  el.className=el.className.replace('tf-off','tf-on');
+  document.querySelectorAll('.tf-btn').forEach(b=>{ if(b.textContent.trim()===tf){b.className=b.className.replace('tf-off','tf-on');} });
+}
+
+function runAnalysis(){
+  const btn=document.getElementById('analyseBtn');
+  btn.textContent='⏳ Running Engine...';
+  btn.style.background='#374e00'; btn.style.color='#BDFF00';
+  setTimeout(()=>{
+    btn.textContent='✓ Analysis Complete';
+    btn.style.background='#b7f700'; btn.style.color='#141f00';
+    setTimeout(()=>{ btn.textContent='⚡ Analyse Now'; btn.style.background=''; btn.style.color=''; },2500);
+  },1400);
+}
+</script>
+</body>
+</html>
