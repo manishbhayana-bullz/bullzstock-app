@@ -737,27 +737,20 @@ def inject_global_css():
     /* Hide Material Symbols text (keyboard_double_arrow_right sidebar toggle) */
     [data-testid="collapsedControl"] { display: none !important; }
     button[kind="header"] { display: none !important; }
-    /* Hide ALL "Select XXXX" stock picker buttons in sidebar */
-    [data-testid="stSidebar"] button:not([kind="primary"]):not([kind="secondary"]) {
-        visibility: hidden !important;
-        height: 0px !important;
-        min-height: 0 !important;
-        padding: 0 !important;
-        margin: 0 !important;
+    /* Stock picker invisible buttons — overlap the card above them */
+    [data-testid="stSidebar"] [data-testid="stButton"] > button[title^="Select "],
+    [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"][title^="Select "] {
+        opacity: 0 !important;
+        position: relative !important;
+        margin-top: -44px !important;
+        height: 44px !important;
+        min-height: 44px !important;
+        max-height: 44px !important;
         border: none !important;
-        overflow: hidden !important;
-        pointer-events: none !important;
-    }
-    /* But keep secondary buttons (TF pills, Clear History) visible */
-    [data-testid="stSidebar"] button[kind="secondary"] {
-        visibility: visible !important;
-        height: auto !important;
-        min-height: 36px !important;
-        padding: auto !important;
-        margin: auto !important;
-        border: 1px solid rgba(255,255,255,0.08) !important;
-        overflow: visible !important;
-        pointer-events: auto !important;
+        background: transparent !important;
+        cursor: pointer !important;
+        z-index: 10 !important;
+        box-shadow: none !important;
     }
     /* Sidebar stock card buttons — completely invisible */
     [data-testid="stSidebar"] .bz-pick-btn + div .stButton > button,
@@ -805,7 +798,10 @@ def inject_global_css():
             font-size: 11px !important;
         }
         /* Primary = Analyse Now */
-        .stButton > button[kind="primary"] {
+        .stButton > button[kind="primary"],
+        .stButton > button[kind="primary"] p,
+        .stButton > button[kind="primary"] span,
+        .stButton > button[kind="primary"] div {
             background: #BDFF00 !important;
             color: #0a1000 !important;
             border: none !important;
@@ -813,8 +809,15 @@ def inject_global_css():
             font-weight: 900 !important;
             letter-spacing: 0.05em !important;
         }
-        .stButton > button[kind="primary"]:hover {
+        .stButton > button[kind="primary"]:hover,
+        .stButton > button[kind="primary"]:hover p,
+        .stButton > button[kind="primary"]:hover span {
             background: #d4ff33 !important;
+            color: #0a1000 !important;
+        }
+        /* Also target the active TF pill and Neon theme button */
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] p,
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] span {
             color: #0a1000 !important;
         }
         /* Secondary buttons */
@@ -1097,14 +1100,14 @@ def render_sidebar():
         )
         filtered = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
 
-        # ── Stock cards with live prices ──────────────────────
+        # ── Stock cards with live prices — radio hidden, cards clickable ──
         st.markdown('<div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.14em;color:#6b7a94;margin:8px 0 5px">Select Stock</div>', unsafe_allow_html=True)
 
+        # Build card HTML for all stocks
+        ticker_list = list(filtered.keys())
         for tkr, info in filtered.items():
             is_active = st.session_state.selected_ticker == tkr
             active_cls = "active" if is_active else ""
-
-            # Fetch quick price for this ticker (cached 60s)
             qp = fetch_quick_price(info["yf"])
             if qp:
                 price_str = f"₹{qp['price']:,.1f}"
@@ -1112,29 +1115,20 @@ def render_sidebar():
                 pct_str   = f"{'+' if pct_val >= 0 else ''}{pct_val:.2f}%"
                 pct_cls   = "bz-sb-pos" if pct_val >= 0 else "bz-sb-neg"
             else:
-                price_str = "—"
-                pct_str   = "NSE"
-                pct_cls   = "bz-sb-pos" if is_neon() else "bz-sb-pos"
+                price_str = "—"; pct_str = "NSE"; pct_cls = "bz-sb-pos"
 
-            # Wrap card+button in a container div for CSS targeting
             st.markdown(f"""
-            <div class="bz-pick-btn">
-            <div class="bz-sb-card {active_cls}">
-              <div>
-                <span class="bz-sb-tk">{tkr}</span>
-                <span class="bz-sb-nm">{info['name']}</span>
-              </div>
-              <div>
-                <span class="bz-sb-pr {pct_cls}">{price_str}</span>
-                <span class="bz-sb-pr {pct_cls}" style="font-size:9px">{pct_str}</span>
-              </div>
-            </div>
+            <div class="bz-sb-card {active_cls}" style="margin-bottom:2px">
+              <div><span class="bz-sb-tk">{tkr}</span><span class="bz-sb-nm">{info['name']}</span></div>
+              <div><span class="bz-sb-pr {pct_cls}">{price_str}</span>
+                   <span class="bz-sb-pr {pct_cls}" style="font-size:9px">{pct_str}</span></div>
             </div>""", unsafe_allow_html=True)
 
-            if st.button(f"Select {tkr}", key=f"pick_{tkr}", use_container_width=True,
-                         help=f"Select {tkr} ({info['name']})"):
+            # Invisible zero-height button overlay — functionally works, visually hidden via CSS
+            if st.button(" ", key=f"pick_{tkr}", use_container_width=True,
+                         help=f"Select {tkr}"):
                 st.session_state.selected_ticker = tkr
-                st.session_state.analyse_clicked  = False
+                st.session_state.analyse_clicked = False
                 st.rerun()
 
         # ── Timeframe — compact inline pills ─────────────────
@@ -1155,6 +1149,9 @@ def render_sidebar():
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("⚡  Analyse Now", use_container_width=True, type="primary", key="analyse_btn"):
             st.session_state.analyse_clicked = True
+            # Clear cache so fresh data loads for new ticker
+            fetch_via_yfinance.clear()
+            fetch_quick_price.clear()
             st.rerun()
 
         # ── Selected stock info ───────────────────────────────
