@@ -1034,7 +1034,7 @@ def render_ticker_strip():
     inner = "  ".join(item_html(*i) for i in items)
     double = inner + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + inner
 
-    Use components.v1.html for TRUE full-width — bypasses Streamlit column padding
+    # Use components.v1.html for TRUE full-width — bypasses Streamlit column padding
 #     html = f"""<!DOCTYPE html>
 # <html><head>
 # <style>
