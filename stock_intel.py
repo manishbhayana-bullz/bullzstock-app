@@ -457,6 +457,8 @@ def get_news_link(ticker_symbol, full_name):
 # ══════════════════════════════════════════════════════════════
 @st.cache_data(ttl=300)
 def fetch_via_yfinance(yf_ticker, period, interval):
+    # Step 1: Fast chart API for OHLCV + price data
+    price_result = None
     try:
         url     = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_ticker}?range={period}&interval={interval}"
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -480,7 +482,7 @@ def fetch_via_yfinance(yf_ticker, period, interval):
                 if len(closes) >= 5:
                     curr = meta.get("regularMarketPrice") or closes[-1]
                     prev = meta.get("previousClose") or closes[-2]
-                    return {
+                    price_result = {
                         "source": "Yahoo Finance",
                         "current_price": curr, "prev_close": prev,
                         "open":   meta.get("regularMarketOpen",    opens[-1]   if opens   else curr),
@@ -493,68 +495,83 @@ def fetch_via_yfinance(yf_ticker, period, interval):
                         "opens": opens, "highs": highs, "lows": lows,
                         "closes": closes, "volumes": volumes,
                         "dates": dates if len(dates) == len(closes) else list(range(len(closes))),
-                        "pe_ratio": None, "eps": None, "market_cap": None,
-                        "revenue_growth": None, "debt_equity": None, "roe": None,
-                        "dividend_yield": None,
                         "52w_high": meta.get("fiftyTwoWeekHigh"),
                         "52w_low":  meta.get("fiftyTwoWeekLow"),
-                        "sector": None, "book_value": None, "price_to_book": None,
+                        # Fundamentals default to None — filled by Step 2
+                        "pe_ratio": None, "eps": None, "market_cap": None,
+                        "revenue_growth": None, "debt_equity": None, "roe": None,
+                        "dividend_yield": None, "sector": None,
+                        "book_value": None, "price_to_book": None,
                         "current_ratio": None, "profit_margins": None,
                     }
     except Exception:
         pass
 
-    if not YF_AVAILABLE: return None
-    try:
-        t    = yf.Ticker(yf_ticker)
-        hist = t.history(period=period, interval=interval, auto_adjust=True)
-        if hist.empty or len(hist) < 5: return None
-        info = {}
-        try: info = t.info
-        except: pass
-        opens   = clean_list(hist["Open"].tolist())
-        highs   = clean_list(hist["High"].tolist())
-        lows    = clean_list(hist["Low"].tolist())
-        closes  = clean_list(hist["Close"].tolist())
-        volumes = clean_list(hist["Volume"].tolist())
-        dates   = [str(d)[:16] for d in hist.index.tolist()]
-        curr    = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
+    # Step 2: Always try yfinance .info for fundamentals (separate from chart API)
+    if YF_AVAILABLE:
+        try:
+            t    = yf.Ticker(yf_ticker)
+            info = {}
+            try: info = t.fast_info if hasattr(t, 'fast_info') else t.info
+            except: pass
+            # If no price_result yet, also get history
+            if not price_result:
+                hist = t.history(period=period, interval=interval, auto_adjust=True)
+                if not hist.empty and len(hist) >= 5:
+                    opens   = clean_list(hist["Open"].tolist())
+                    highs   = clean_list(hist["High"].tolist())
+                    lows    = clean_list(hist["Low"].tolist())
+                    closes  = clean_list(hist["Close"].tolist())
+                    volumes = clean_list(hist["Volume"].tolist())
+                    dates   = [str(d)[:16] for d in hist.index.tolist()]
+                    curr    = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
+                    price_result = {
+                        "source": "Yahoo Finance",
+                        "current_price": curr, "prev_close": prev,
+                        "open": opens[-1] if opens else curr,
+                        "high": highs[-1] if highs else curr,
+                        "low":  lows[-1]  if lows  else curr,
+                        "volume": volumes[-1] if volumes else 0,
+                        "change": curr - prev,
+                        "change_pct": ((curr - prev) / prev * 100) if prev else 0,
+                        "time": datetime.now().strftime("%H:%M"),
+                        "opens": opens, "highs": highs, "lows": lows,
+                        "closes": closes, "volumes": volumes, "dates": dates,
+                        "52w_high": None, "52w_low": None,
+                        "pe_ratio": None, "eps": None, "market_cap": None,
+                        "revenue_growth": None, "debt_equity": None, "roe": None,
+                        "dividend_yield": None, "sector": None,
+                        "book_value": None, "price_to_book": None,
+                        "current_ratio": None, "profit_margins": None,
+                    }
 
-        def get_info(*keys):
-            for k in keys:
-                v = info.get(k)
-                if v is not None: return v
-            return None
+            # Merge fundamentals from info into price_result
+            if price_result and info:
+                def gi(*keys):
+                    for k in keys:
+                        v = info.get(k)
+                        if v is not None and v != 0: return v
+                    return None
+                price_result.update({
+                    "pe_ratio":       gi("trailingPE", "forwardPE"),
+                    "eps":            gi("trailingEps", "forwardEps"),
+                    "market_cap":     gi("marketCap"),
+                    "revenue_growth": gi("revenueGrowth", "earningsGrowth"),
+                    "debt_equity":    gi("debtToEquity"),
+                    "roe":            gi("returnOnEquity", "returnOnAssets"),
+                    "dividend_yield": gi("dividendYield", "trailingAnnualDividendYield"),
+                    "52w_high":       gi("fiftyTwoWeekHigh") or price_result.get("52w_high"),
+                    "52w_low":        gi("fiftyTwoWeekLow")  or price_result.get("52w_low"),
+                    "sector":         gi("sector", "industry"),
+                    "book_value":     gi("bookValue"),
+                    "price_to_book":  gi("priceToBook"),
+                    "current_ratio":  gi("currentRatio"),
+                    "profit_margins": gi("profitMargins", "grossMargins"),
+                })
+        except Exception:
+            pass
 
-        return {
-            "source": "Yahoo Finance",
-            "current_price": curr, "prev_close": prev,
-            "open": opens[-1] if opens else curr,
-            "high": highs[-1] if highs else curr,
-            "low":  lows[-1]  if lows  else curr,
-            "volume": volumes[-1] if volumes else 0,
-            "change": curr - prev,
-            "change_pct": ((curr - prev) / prev * 100) if prev else 0,
-            "time": datetime.now().strftime("%H:%M"),
-            "opens": opens, "highs": highs, "lows": lows,
-            "closes": closes, "volumes": volumes, "dates": dates,
-            "pe_ratio":       get_info("trailingPE", "forwardPE"),
-            "eps":            get_info("trailingEps", "forwardEps"),
-            "market_cap":     get_info("marketCap"),
-            "revenue_growth": get_info("revenueGrowth", "earningsGrowth"),
-            "debt_equity":    get_info("debtToEquity"),
-            "roe":            get_info("returnOnEquity", "returnOnAssets"),
-            "dividend_yield": get_info("dividendYield", "trailingAnnualDividendYield"),
-            "52w_high":       get_info("fiftyTwoWeekHigh"),
-            "52w_low":        get_info("fiftyTwoWeekLow"),
-            "sector":         get_info("sector", "industry"),
-            "book_value":     get_info("bookValue"),
-            "price_to_book":  get_info("priceToBook"),
-            "current_ratio":  get_info("currentRatio"),
-            "profit_margins": get_info("profitMargins", "grossMargins"),
-        }
-    except Exception as e:
-        return None
+    return price_result
 
 @st.cache_data(ttl=60)
 def fetch_quick_price(yf_ticker):
@@ -659,41 +676,50 @@ def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, sh
     if show_bb:     studies.append('"BB@tv-basicstudies"')
     studies_str = "[" + ",".join(studies) + "]"
 
-    # Unique container ID prevents TradingView iframe caching wrong stock
-    uid   = hashlib.md5(f"{tv_symbol}{tv_interval}".encode()).hexdigest()[:8]
+    # Unique container ID per symbol+interval prevents iframe caching wrong stock
+    uid   = hashlib.md5(f"{tv_symbol}{tv_interval}{datetime.now().strftime('%H%M')}".encode()).hexdigest()[:10]
     cid   = f"tv_{uid}"
     theme = "dark" if is_neon() else "light"
+    bg    = "#0a0b0d" if is_neon() else "#ffffff"
 
+    # Use widget URL approach as fallback for symbol resolution
     widget_html = f"""
-    <div class="tradingview-widget-container" style="height:490px;width:100%">
+    <div style="height:490px;width:100%;border-radius:8px;overflow:hidden">
       <div id="{cid}" style="height:100%;width:100%"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-      (function(){{
-        if(typeof TradingView === 'undefined') return;
-        new TradingView.widget({{
-          "autosize": true,
-          "symbol": "{tv_symbol}",
-          "interval": "{tv_interval}",
-          "timezone": "Asia/Kolkata",
-          "theme": "{theme}",
-          "style": "1",
-          "locale": "en",
-          "enable_publishing": false,
-          "withdateranges": true,
-          "hide_side_toolbar": false,
-          "allow_symbol_change": false,
-          "save_image": false,
-          "studies": {studies_str},
-          "container_id": "{cid}",
-          "hide_top_toolbar": false,
-          "show_popup_button": true,
-          "popup_width": "1000",
-          "popup_height": "650"
-        }});
-      }})();
-      </script>
-    </div>"""
+    </div>
+    <script type="text/javascript">
+    (function() {{
+      var script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.onload = function() {{
+        try {{
+          new TradingView.widget({{
+            "autosize": true,
+            "symbol": "{tv_symbol}",
+            "interval": "{tv_interval}",
+            "timezone": "Asia/Kolkata",
+            "theme": "{theme}",
+            "style": "1",
+            "locale": "en",
+            "backgroundColor": "{bg}",
+            "enable_publishing": false,
+            "withdateranges": true,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": false,
+            "save_image": false,
+            "studies": {studies_str},
+            "container_id": "{cid}",
+            "hide_top_toolbar": false,
+            "show_popup_button": true,
+            "popup_width": "1000",
+            "popup_height": "650",
+            "no_referral_id": true
+          }});
+        }} catch(e) {{ console.error('TradingView error:', e); }}
+      }};
+      document.head.appendChild(script);
+    }})();
+    </script>"""
     st.components.v1.html(widget_html, height=500, scrolling=False)
 
 # ══════════════════════════════════════════════════════════════
@@ -705,22 +731,24 @@ def inject_global_css():
     .main .block-container { padding-top: 1rem !important; }
     /* Hide default Streamlit footer */
     footer { display: none !important; }
-    /* Sidebar stock card buttons — invisible but clickable */
-    [data-testid="stSidebar"] .bz-card-wrap + div .stButton > button,
-    [data-testid="stSidebar"] .bz-pick-btn .stButton > button {
-        background: transparent !important;
-        border: none !important;
-        height: 4px !important;
+    /* Sidebar stock card buttons — completely invisible */
+    [data-testid="stSidebar"] .bz-pick-btn + div .stButton > button,
+    [data-testid="stSidebar"] .bz-pick-btn ~ div .stButton > button,
+    [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div > div > div[data-testid="stButton"] > button[title^="Select "] {
+        position: absolute !important;
+        opacity: 0 !important;
+        height: 0px !important;
         min-height: 0 !important;
+        max-height: 0 !important;
         padding: 0 !important;
-        margin-top: -3px !important;
-        margin-bottom: 4px !important;
-        color: transparent !important;
-        font-size: 1px !important;
-        box-shadow: none !important;
-        cursor: pointer !important;
+        margin: 0 !important;
+        border: none !important;
         overflow: hidden !important;
+        pointer-events: none !important;
+        font-size: 0 !important;
     }
+    /* Make the card itself clickable via label trick */
+    [data-testid="stSidebar"] .bz-pick-btn { cursor: pointer; }
     """
 
     if is_neon():
@@ -750,7 +778,7 @@ def inject_global_css():
         }
         /* Primary = Analyse Now */
         .stButton > button[kind="primary"] {
-            background: #8aad00 !important;
+            background: #BDFF00 !important;
             color: #0a1000 !important;
             border: none !important;
             font-size: 12px !important;
@@ -758,7 +786,8 @@ def inject_global_css():
             letter-spacing: 0.05em !important;
         }
         .stButton > button[kind="primary"]:hover {
-            background: #a3cc00 !important;
+            background: #d4ff33 !important;
+            color: #0a1000 !important;
         }
         /* Secondary buttons */
         .stButton > button[kind="secondary"] {
@@ -842,7 +871,17 @@ def inject_global_css():
         .bz-disclaimer { font-size: 10px; color: #6b7a94; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; line-height: 1.6; margin-top: 14px; }
 
         /* Ticker strip */
-        .bz-ticker-strip { background: #060709; border-bottom: 1px solid rgba(255,255,255,0.05); padding: 7px 0; overflow: hidden; white-space: nowrap; margin-bottom: 14px; }
+        .bz-ticker-strip {
+            background: #060709;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding: 7px 0;
+            overflow: hidden;
+            white-space: nowrap;
+            margin-bottom: 14px;
+            margin-left: -3rem;
+            margin-right: -3rem;
+            width: calc(100% + 6rem);
+        }
         .bz-ticker-inner { display: inline-flex; gap: 2rem; animation: bz-marquee 30s linear infinite; padding-left: 1rem; }
         .bz-ticker-item { font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #8b949e; }
         .bz-tk  { color: #c9d1d9; }
@@ -968,14 +1007,15 @@ def render_sidebar():
         ag = acc_green()
 
         # ── Logo ─────────────────────────────────────────────
-        logo_bg = "#8aad00" if is_neon() else "#00d084"
+        logo_bg = "#BDFF00" if is_neon() else "#00d084"
+        logo_txt = "#0a1000" if is_neon() else "#ffffff"
         st.markdown(f"""
         <div style="padding:14px 8px 12px;border-bottom:1px solid rgba(255,255,255,0.07);margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:32px;height:32px;background:{logo_bg};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px">🐂</div>
+            <div style="width:36px;height:36px;background:{logo_bg};border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🐂</div>
             <div>
-              <div style="font-size:14px;font-weight:800;color:{ag};letter-spacing:0.01em">BullzStock</div>
-              <div style="font-size:8px;color:#6b7a94;letter-spacing:0.15em;text-transform:uppercase;margin-top:1px">NSE India · Signal Engine</div>
+              <div style="font-size:15px;font-weight:900;color:{ag};letter-spacing:-0.01em">BullzStock</div>
+              <div style="font-size:8px;color:#4b5563;letter-spacing:0.15em;text-transform:uppercase;margin-top:1px">NSE India · Signal Engine</div>
             </div>
           </div>
         </div>""", unsafe_allow_html=True)
