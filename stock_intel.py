@@ -856,14 +856,14 @@ def inject_global_css():
         /* OHLCV */
         .bz-ohlcv { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 10px 12px; text-align: center; }
         .bz-ohlcv-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
-        .bz-ohlcv-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #e3e2e2; }
+        .bz-ohlcv-val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; color: #e3e2e2; }
 
         /* Signal box */
         .bz-signal-box { border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
         .bz-trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
         .bz-trade-cell { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 9px 11px; }
         .bz-trade-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
-        .bz-trade-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; }
+        .bz-trade-val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; }
         .bz-trade-sub { font-size: 10px; margin-top: 2px; color: #6b7a94; }
 
         /* Votes */
@@ -871,10 +871,10 @@ def inject_global_css():
         .bz-vote-icon { width: 13px; height: 13px; min-width: 13px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; margin-top: 1px; }
 
         /* Indicator rows */
-        .bz-ind-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; }
+        .bz-ind-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
         .bz-ind-row:last-child { border-bottom: none; }
         .bz-ind-key { color: #6b7a94; }
-        .bz-ind-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; font-weight: 600; white-space: nowrap; }
+        .bz-ind-badge { font-size: 11px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; font-weight: 600; white-space: nowrap; }
         .bz-badge-bull { background: rgba(189,255,0,0.1);   color: #BDFF00; }
         .bz-badge-bear { background: rgba(255,77,106,0.1);  color: #ff4d6a; }
         .bz-badge-neut { background: rgba(255,255,255,0.06); color: #8b949e; }
@@ -909,9 +909,12 @@ def inject_global_css():
             overflow: hidden;
             white-space: nowrap;
             margin-bottom: 14px;
-            margin-left: -3rem;
-            margin-right: -3rem;
-            width: calc(100% + 6rem);
+            position: relative;
+            left: 50%;
+            right: 50%;
+            margin-left: -50vw;
+            margin-right: -50vw;
+            width: 100vw;
         }
         .bz-ticker-inner { display: inline-flex; gap: 2rem; animation: bz-marquee 30s linear infinite; padding-left: 1rem; }
         .bz-ticker-item { font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #8b949e; }
@@ -930,6 +933,8 @@ def inject_global_css():
         [data-testid="stSidebar"] { background: #0d1219 !important; border-right: 1px solid rgba(255,255,255,0.07) !important; }
         [data-testid="stSidebar"] * { color: #e8edf5 !important; font-family: 'Syne', sans-serif !important; }
         [data-testid="stMain"], [data-testid="stMainBlockContainer"] { background: #f0f4f8 !important; }
+        [data-testid="stBaseButton-primary"] p { color: #0a1000 !important; }
+        [data-testid="stBaseButton-primary"] span { color: #0a1000 !important; }
 
         [data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {
             background: #111820 !important; border: 1px solid rgba(255,255,255,0.1) !important;
@@ -937,7 +942,7 @@ def inject_global_css():
         }
 
         .stButton > button { font-family: 'Syne', sans-serif !important; font-weight: 700 !important; border-radius: 6px !important; font-size: 11px !important; }
-        .stButton > button[kind="primary"] { background: #00a86b !important; color: #fff !important; border: none !important; font-size: 12px !important; font-weight: 900 !important; }
+        .stButton > button[kind="primary"] { color: #0a1000 !important; background: #00a86b !important; color: #fff !important; border: none !important; font-size: 12px !important; font-weight: 900 !important; }
         .stButton > button[kind="primary"]:hover { background: #00c27a !important; }
         .stButton > button[kind="secondary"] { background: #111820 !important; color: #6b7a94 !important; border: 1px solid rgba(255,255,255,0.1) !important; }
 
@@ -955,13 +960,13 @@ def inject_global_css():
 
         .bz-ohlcv { background: #ffffff; border: 1px solid rgba(0,0,0,0.08); border-radius: 8px; padding: 10px 12px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .bz-ohlcv-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 5px; }
-        .bz-ohlcv-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #1a2333; }
+        .bz-ohlcv-val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; color: #1a2333; }
 
         .bz-signal-box { border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
         .bz-trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
         .bz-trade-cell { background: #f8fafc; border: 1px solid rgba(0,0,0,0.07); border-radius: 8px; padding: 9px 11px; }
         .bz-trade-label { font-size: 9px; color: #6b7a94; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
-        .bz-trade-val { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: #1a2333; }
+        .bz-trade-val { font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 600; color: #1a2333; }
         .bz-trade-sub { font-size: 10px; margin-top: 2px; color: #6b7a94; }
 
         .bz-vote-row { display: flex; align-items: flex-start; gap: 7px; font-size: 10px; color: #6b7a94; padding: 2px 0; line-height: 1.4; }
@@ -970,7 +975,7 @@ def inject_global_css():
         .bz-ind-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 11px; }
         .bz-ind-row:last-child { border-bottom: none; }
         .bz-ind-key { color: #6b7a94; }
-        .bz-ind-badge { font-size: 9px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; font-weight: 600; white-space: nowrap; }
+        .bz-ind-badge { font-size: 11px; padding: 2px 5px; border-radius: 3px; margin-left: 5px; font-weight: 600; white-space: nowrap; }
         .bz-badge-bull { background: rgba(0,208,132,0.1);  color: #00a86b; }
         .bz-badge-bear { background: rgba(255,77,106,0.1); color: #ff4d6a; }
         .bz-badge-neut { background: rgba(0,0,0,0.06);     color: #6b7a94; }
@@ -990,7 +995,7 @@ def inject_global_css():
         .bz-price-header { background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 12px; padding: 14px 18px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .bz-disclaimer { font-size: 10px; color: #6b7a94; padding: 10px 14px; background: #ffffff; border: 1px solid rgba(0,0,0,0.07); border-radius: 8px; line-height: 1.6; margin-top: 14px; }
 
-        .bz-ticker-strip { background: #0d1219; border-radius: 8px; padding: 7px 0; overflow: hidden; white-space: nowrap; margin-bottom: 14px; }
+        .bz-ticker-strip { background: #0d1219; padding: 7px 0; overflow: hidden; white-space: nowrap; margin-bottom: 14px; position: relative; left: 50%; right: 50%; margin-left: -50vw; margin-right: -50vw; width: 100vw; }
         .bz-ticker-inner { display: inline-flex; gap: 2rem; animation: bz-marquee 30s linear infinite; padding-left: 1rem; }
         .bz-ticker-item { font-size: 10px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; color: #6b7a94; }
         .bz-tk  { color: #e8edf5; }
@@ -1029,31 +1034,31 @@ def render_ticker_strip():
     inner = "  ".join(item_html(*i) for i in items)
     double = inner + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + inner
 
-    # Use components.v1.html for TRUE full-width — bypasses Streamlit column padding
-    html = f"""<!DOCTYPE html>
-<html><head>
-<style>
-  * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ background:{bg_c}; overflow:hidden; height:36px; }}
-  .strip {{ height:36px; display:flex; align-items:center; overflow:hidden;
-            border-bottom:1px solid rgba(255,255,255,0.05);
-            border-top:1px solid rgba(255,255,255,0.05); }}
-  .label {{ font-size:9px; font-weight:900; color:{pos_c}; font-family:Manrope,sans-serif;
-            text-transform:uppercase; letter-spacing:0.1em; padding:0 12px;
-            white-space:nowrap; border-right:1px solid rgba(255,255,255,0.08); flex-shrink:0; }}
-  @keyframes scroll {{ 0%{{transform:translateX(0)}} 100%{{transform:translateX(-50%)}} }}
-  .ticker {{ flex:1; overflow:hidden; }}
-  .inner {{ display:inline-flex; gap:2rem; animation:scroll 28s linear infinite;
-            white-space:nowrap; padding-left:1rem; }}
-</style>
-</head>
-<body>
-<div class="strip">
-  <div class="label">⚡ NSE LIVE</div>
-  <div class="ticker"><div class="inner">{double}</div></div>
-</div>
-</body></html>"""
-    st.components.v1.html(html, height=38, scrolling=False)
+    Use components.v1.html for TRUE full-width — bypasses Streamlit column padding
+#     html = f"""<!DOCTYPE html>
+# <html><head>
+# <style>
+#   * {{ margin:0; padding:0; box-sizing:border-box; }}
+#   body {{ background:{bg_c}; overflow:hidden; height:36px; }}
+#   .strip {{ height:36px; display:flex; align-items:center; overflow:hidden;
+#             border-bottom:1px solid rgba(255,255,255,0.05);
+#             border-top:1px solid rgba(255,255,255,0.05); }}
+#   .label {{ font-size:9px; font-weight:900; color:{pos_c}; font-family:Manrope,sans-serif;
+#             text-transform:uppercase; letter-spacing:0.1em; padding:0 12px;
+#             white-space:nowrap; border-right:1px solid rgba(255,255,255,0.08); flex-shrink:0; }}
+#   @keyframes scroll {{ 0%{{transform:translateX(0)}} 100%{{transform:translateX(-50%)}} }}
+#   .ticker {{ flex:1; overflow:hidden; }}
+#   .inner {{ display:inline-flex; gap:2rem; animation:scroll 28s linear infinite;
+#             white-space:nowrap; padding-left:1rem; }}
+# </style>
+# </head>
+# <body>
+# <div class="strip">
+#   <div class="label">⚡ NSE LIVE</div>
+#   <div class="ticker"><div class="inner">{double}</div></div>
+# </div>
+# </body></html>"""
+    st.markdown(f"""<div class="bz-ticker-strip"><div class="bz-ticker-inner">{double}</div></div>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
 #  SIDEBAR
