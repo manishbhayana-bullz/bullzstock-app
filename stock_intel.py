@@ -48,7 +48,7 @@ INDUSTRY_ICONS = {
 }
 
 STOCKS = {
-    "PFOCUS":     {"name": "PI Focus",       "industry": "IT",         "yf": "PFOCUS.NS",     "av": "PFOCUS",     "fullName": "Photon Infotech Focus",   "tv": "NSE:PFOCUS"},
+    "PFOCUS":     {"name": "PI Focus",       "industry": "IT",         "yf": "PFOCUS.NS",     "av": "PFOCUS",     "fullName": "Photon Infotech Focus",   "tv": "BSE:PFOCUS"},
     "HDFCBANK":   {"name": "HDFC Bank",      "industry": "Banking",    "yf": "HDFCBANK.NS",   "av": "HDFCBANK",   "fullName": "HDFC Bank Ltd.",          "tv": "NSE:HDFCBANK"},
     "ITC":        {"name": "ITC Ltd.",        "industry": "FMCG",       "yf": "ITC.NS",        "av": "ITC",        "fullName": "ITC Limited",             "tv": "NSE:ITC"},
     "PNB":        {"name": "PNB",            "industry": "Banking",    "yf": "PNB.NS",        "av": "PNB",        "fullName": "Punjab National Bank",    "tv": "NSE:PNB"},
@@ -674,52 +674,55 @@ def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, sh
     if show_ema50:  studies.append('"MAExp@tv-basicstudies"')
     if show_ema200: studies.append('"MAExp@tv-basicstudies"')
     if show_bb:     studies.append('"BB@tv-basicstudies"')
-    studies_str = "[" + ",".join(studies) + "]"
+    studies_json = "[" + ",".join(studies) + "]"
 
-    # Unique container ID per symbol+interval prevents iframe caching wrong stock
-    uid   = hashlib.md5(f"{tv_symbol}{tv_interval}{datetime.now().strftime('%H%M')}".encode()).hexdigest()[:10]
-    cid   = f"tv_{uid}"
-    theme = "dark" if is_neon() else "light"
-    bg    = "#0a0b0d" if is_neon() else "#ffffff"
+    theme   = "dark" if is_neon() else "light"
+    bg      = "rgba(10,11,13,1)" if is_neon() else "rgba(255,255,255,1)"
+    # Unique key changes whenever symbol or interval changes → forces iframe reload
+    import time as _time
+    uid = hashlib.md5(f"{tv_symbol}_{tv_interval}_{show_ema50}_{show_ema200}_{show_bb}".encode()).hexdigest()[:12]
 
-    # Use widget URL approach as fallback for symbol resolution
-    widget_html = f"""
-    <div style="height:490px;width:100%;border-radius:8px;overflow:hidden">
-      <div id="{cid}" style="height:100%;width:100%"></div>
-    </div>
-    <script type="text/javascript">
-    (function() {{
-      var script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.onload = function() {{
-        try {{
-          new TradingView.widget({{
-            "autosize": true,
-            "symbol": "{tv_symbol}",
-            "interval": "{tv_interval}",
-            "timezone": "Asia/Kolkata",
-            "theme": "{theme}",
-            "style": "1",
-            "locale": "en",
-            "backgroundColor": "{bg}",
-            "enable_publishing": false,
-            "withdateranges": true,
-            "hide_side_toolbar": false,
-            "allow_symbol_change": false,
-            "save_image": false,
-            "studies": {studies_str},
-            "container_id": "{cid}",
-            "hide_top_toolbar": false,
-            "show_popup_button": true,
-            "popup_width": "1000",
-            "popup_height": "650",
-            "no_referral_id": true
-          }});
-        }} catch(e) {{ console.error('TradingView error:', e); }}
-      }};
-      document.head.appendChild(script);
-    }})();
-    </script>"""
+    widget_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body {{ margin:0; padding:0; background:{bg}; }}
+  #chart {{ width:100%; height:490px; }}
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+var tvScript = document.createElement("script");
+tvScript.src = "https://s3.tradingview.com/tv.js";
+tvScript.async = true;
+tvScript.onload = function() {{
+  new TradingView.widget({{
+    container_id: "chart",
+    autosize: true,
+    symbol: "{tv_symbol}",
+    interval: "{tv_interval}",
+    timezone: "Asia/Kolkata",
+    theme: "{theme}",
+    style: "1",
+    locale: "en",
+    toolbar_bg: "{'#0a0b0d' if is_neon() else '#f1f3f6'}",
+    enable_publishing: false,
+    withdateranges: true,
+    hide_side_toolbar: false,
+    allow_symbol_change: false,
+    save_image: false,
+    studies: {studies_json},
+    hide_top_toolbar: false,
+    show_popup_button: true,
+    popup_width: "1000",
+    popup_height: "650"
+  }});
+}};
+document.head.appendChild(tvScript);
+</script>
+</body>
+</html>"""
     st.components.v1.html(widget_html, height=500, scrolling=False)
 
 # ══════════════════════════════════════════════════════════════
@@ -731,6 +734,31 @@ def inject_global_css():
     .main .block-container { padding-top: 1rem !important; }
     /* Hide default Streamlit footer */
     footer { display: none !important; }
+    /* Hide Material Symbols text (keyboard_double_arrow_right sidebar toggle) */
+    [data-testid="collapsedControl"] { display: none !important; }
+    button[kind="header"] { display: none !important; }
+    /* Hide ALL "Select XXXX" stock picker buttons in sidebar */
+    [data-testid="stSidebar"] button:not([kind="primary"]):not([kind="secondary"]) {
+        visibility: hidden !important;
+        height: 0px !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
+    }
+    /* But keep secondary buttons (TF pills, Clear History) visible */
+    [data-testid="stSidebar"] button[kind="secondary"] {
+        visibility: visible !important;
+        height: auto !important;
+        min-height: 36px !important;
+        padding: auto !important;
+        margin: auto !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        overflow: visible !important;
+        pointer-events: auto !important;
+    }
     /* Sidebar stock card buttons — completely invisible */
     [data-testid="stSidebar"] .bz-pick-btn + div .stButton > button,
     [data-testid="stSidebar"] .bz-pick-btn ~ div .stButton > button,
@@ -974,30 +1002,55 @@ def inject_global_css():
 # ══════════════════════════════════════════════════════════════
 def render_ticker_strip():
     items = [
-        ("NIFTY 50", "22,456", "+0.84%", True),
-        ("SENSEX",   "73,852", "+0.76%", True),
-        ("BANKNIFTY","48,210", "−0.22%", False),
-        ("BAJAJ-AUTO","9,994", "+4.60%", True),
-        ("RELIANCE",  "1,430", "+6.50%", True),
-        ("HDFCBANK",  "1,680", "+2.10%", True),
-        ("PFOCUS",    "308.15","−1.96%", False),
-        ("ITC",       "450.20","+1.22%", True),
-        ("TATAMOTORS","910.55","−0.35%", False),
-        ("HAL",      "4,250", "+1.80%", True),
+        ("NIFTY 50",   "22,456",  "+0.84%", True),
+        ("SENSEX",     "73,852",  "+0.76%", True),
+        ("BANKNIFTY",  "48,210",  "−0.22%", False),
+        ("BAJAJ-AUTO", "9,994",   "+4.60%", True),
+        ("RELIANCE",   "1,430",   "+6.50%", True),
+        ("HDFCBANK",   "1,680",   "+2.10%", True),
+        ("PFOCUS",     "308.15",  "−1.96%", False),
+        ("ITC",        "450.20",  "+1.22%", True),
+        ("TATAMOTORS", "910.55",  "−0.35%", False),
+        ("HAL",        "4,250",   "+1.80%", True),
     ]
-    def item_html(tkr, price, pct, up):
-        cls = "bz-pos" if up else "bz-neg"
-        return f'<span class="bz-ticker-item"><span class="bz-tk">{tkr}</span> <span class="{cls}">{price} {pct}</span></span>'
+    pos_c = "#BDFF00" if is_neon() else "#00d084"
+    bg_c  = "#060709" if is_neon() else "#0d1219"
 
-    inner = "".join(item_html(*i) for i in items)
-    # Duplicate for seamless loop
-    st.markdown(f"""
-    <div class="bz-ticker-strip">
-      <div class="bz-ticker-inner">
-        <div style="display:inline-flex;gap:2.5rem;padding-right:2.5rem">{inner}</div>
-        <div style="display:inline-flex;gap:2.5rem;padding-right:2.5rem">{inner}</div>
-      </div>
-    </div>""", unsafe_allow_html=True)
+    def item_html(tkr, price, pct, up):
+        color = pos_c if up else "#ff4d6a"
+        return (f'<span style="font-size:10px;font-weight:700;font-family:IBM Plex Mono,monospace;'
+                f'color:#8b949e;white-space:nowrap">'
+                f'<span style="color:#c9d1d9">{tkr}</span> '
+                f'<span style="color:{color}">{price} {pct}</span></span>')
+
+    inner = "  ".join(item_html(*i) for i in items)
+    double = inner + "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + inner
+
+    # Use components.v1.html for TRUE full-width — bypasses Streamlit column padding
+    html = f"""<!DOCTYPE html>
+<html><head>
+<style>
+  * {{ margin:0; padding:0; box-sizing:border-box; }}
+  body {{ background:{bg_c}; overflow:hidden; height:36px; }}
+  .strip {{ height:36px; display:flex; align-items:center; overflow:hidden;
+            border-bottom:1px solid rgba(255,255,255,0.05);
+            border-top:1px solid rgba(255,255,255,0.05); }}
+  .label {{ font-size:9px; font-weight:900; color:{pos_c}; font-family:Manrope,sans-serif;
+            text-transform:uppercase; letter-spacing:0.1em; padding:0 12px;
+            white-space:nowrap; border-right:1px solid rgba(255,255,255,0.08); flex-shrink:0; }}
+  @keyframes scroll {{ 0%{{transform:translateX(0)}} 100%{{transform:translateX(-50%)}} }}
+  .ticker {{ flex:1; overflow:hidden; }}
+  .inner {{ display:inline-flex; gap:2rem; animation:scroll 28s linear infinite;
+            white-space:nowrap; padding-left:1rem; }}
+</style>
+</head>
+<body>
+<div class="strip">
+  <div class="label">⚡ NSE LIVE</div>
+  <div class="ticker"><div class="inner">{double}</div></div>
+</div>
+</body></html>"""
+    st.components.v1.html(html, height=38, scrolling=False)
 
 # ══════════════════════════════════════════════════════════════
 #  SIDEBAR
