@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-MB Stock Intelligence — v3
-Fixes: theme-aware UI, TradingView embed chart, signal reasoning,
-       polished sidebar, fundamentals fallback, news reference link
+BullzStock Intelligence — v4.0
+UI: Dark terminal theme matching bullzstock_v2.html
+    Manrope + IBM Plex Mono · Lime #BDFF00 · Surface #0a0b0d
 """
 
 import math
@@ -20,129 +20,264 @@ try:
 except ImportError:
     YF_AVAILABLE = False
 
-try:
-    import plotly.graph_objects as go
-    from plotly.subplots import make_subplots
-    PLOTLY_AVAILABLE = True
-except ImportError:
-    PLOTLY_AVAILABLE = False
-
-# ── Page config ───────────────────────────────────────────────
+# ── Page config ────────────────────────────────────────────────
 st.set_page_config(
-    page_title="MB Stock Intelligence",
+    page_title="BullzStock Intelligence",
     page_icon="🐂",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-
-
-# ── Theme-aware CSS (works on both light & dark Streamlit themes) ──
+# ── V2 Dark Theme CSS ──────────────────────────────────────────
 st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
 <style>
-  /* Metric cards — transparent so they inherit Streamlit's theme */
-  .mb-card {
-    background: var(--background-color, transparent);
-    border: 1px solid var(--secondary-background-color, #e9ecef);
+  /* ── Reset Streamlit chrome to dark ── */
+  html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    background: #0a0b0d !important;
+    color: #e3e2e2 !important;
+    font-family: 'Manrope', sans-serif !important;
+  }
+  [data-testid="stHeader"] { background: transparent !important; }
+  [data-testid="stToolbar"] { display: none !important; }
+  [data-testid="stDecoration"] { display: none !important; }
+  footer { display: none !important; }
+  #MainMenu { display: none !important; }
+
+  /* ── Sidebar dark ── */
+  [data-testid="stSidebar"] {
+    background: #050607 !important;
+    border-right: 1px solid rgba(255,255,255,0.05) !important;
+  }
+  [data-testid="stSidebar"] * { color: #e3e2e2 !important; }
+  [data-testid="stSidebar"] .stSelectbox label,
+  [data-testid="stSidebar"] .stRadio label { color: #6b7a94 !important; font-size: 9px !important; text-transform: uppercase; letter-spacing: 0.15em; font-weight: 700; }
+  [data-testid="stSidebar"] .stSelectbox > div > div,
+  [data-testid="stSidebar"] [data-baseweb="select"] > div {
+    background: #111315 !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 8px !important;
+    color: #e3e2e2 !important;
+    font-family: 'Manrope', sans-serif !important;
+    font-size: 12px !important;
+  }
+  [data-testid="stSidebar"] [data-baseweb="popover"] > div {
+    background: #111315 !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+  }
+  [data-testid="stSidebar"] [role="option"] { background: #111315 !important; color: #e3e2e2 !important; }
+  [data-testid="stSidebar"] [role="option"]:hover { background: rgba(189,255,0,0.06) !important; }
+
+  /* Radio buttons */
+  [data-testid="stSidebar"] .stRadio > div { gap: 4px !important; }
+  [data-testid="stSidebar"] .stRadio [data-testid="stMarkdownContainer"] p { color: #e3e2e2 !important; font-size: 11px !important; }
+  [data-testid="stSidebar"] .stRadio [data-baseweb="radio"] > div:first-child > div {
+    background: transparent !important;
+    border-color: rgba(255,255,255,0.2) !important;
+  }
+  [data-testid="stSidebar"] [aria-checked="true"] [data-baseweb="radio"] > div:first-child > div {
+    background: #BDFF00 !important;
+    border-color: #BDFF00 !important;
+  }
+
+  /* Sidebar primary button */
+  [data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: #b7f700 !important;
+    color: #141f00 !important;
+    font-family: 'Manrope', sans-serif !important;
+    font-weight: 900 !important;
+    font-size: 11px !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    box-shadow: 0 4px 20px rgba(183,247,0,0.25) !important;
+    transition: all 0.15s !important;
+  }
+  [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    filter: brightness(1.1) !important;
+  }
+  [data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+    background: #111315 !important;
+    color: #6b7a94 !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+  }
+  [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+    color: #e3e2e2 !important;
+    border-color: rgba(255,77,106,0.3) !important;
+  }
+
+  /* Main content area */
+  .block-container {
+    background: #0a0b0d !important;
+    padding-top: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Typography global ── */
+  .mono { font-family: 'IBM Plex Mono', monospace !important; }
+  .ms { font-family: 'Material Symbols Outlined'; font-variation-settings: 'FILL' 0, 'wght' 400; font-size: 18px; line-height: 1; vertical-align: middle; }
+
+  /* ── Cards ── */
+  .glass-card {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+  }
+
+  /* ── OHLCV cards ── */
+  .ohlcv-card {
+    background: #111315;
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: 10px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     text-align: center;
   }
-  .mb-card-label {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    margin-bottom: 4px;
-  }
-  .mb-card-value {
-    font-size: 20px;
+  .ohlcv-label {
+    font-size: 9px;
     font-weight: 700;
-    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #6b7a94;
+    margin-bottom: 6px;
   }
-  .mb-card-sub {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-    margin-top: 3px;
+  .ohlcv-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e3e2e2;
   }
-  /* Signal box */
-  .signal-box {
-    border-radius: 12px;
-    padding: 18px 22px;
-    margin-bottom: 1rem;
-  }
-  .vote-item { font-size: 13px; padding: 2px 0; }
-  /* Indicator rows */
+
+  /* ── Signal states ── */
+  .signal-wait { background: rgba(245,166,35,0.08); border: 1px solid rgba(245,166,35,0.25); }
+  .signal-buy  { background: rgba(189,255,0,0.06);  border: 1px solid rgba(189,255,0,0.25); }
+  .signal-sell { background: rgba(255,77,106,0.08); border: 1px solid rgba(255,77,106,0.25); }
+  .signal-hold { background: rgba(77,159,255,0.08); border: 1px solid rgba(77,159,255,0.25); }
+
+  /* ── Indicator badges ── */
+  .ib { font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 700; letter-spacing: 0.04em; margin-left: 5px; }
+  .ib-bull { background: rgba(189,255,0,0.1);  color: #BDFF00; }
+  .ib-bear { background: rgba(255,77,106,0.1); color: #ff4d6a; }
+  .ib-neut { background: rgba(255,255,255,0.06); color: #8b949e; }
+  .ib-warn { background: rgba(245,166,35,0.1); color: #f5a623; }
+
+  /* ── Indicator rows ── */
   .ind-row {
     display: flex;
     justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px solid var(--secondary-background-color, #f0f0f0);
-    font-size: 13px;
-  }
-  .ind-label { color: var(--text-color-muted, #6c757d); }
-  /* Sidebar stock card */
-  .sb-stock-card {
-    background: var(--secondary-background-color, #f8f9fa);
-    border-radius: 8px;
-    padding: 10px 12px;
-    margin: 6px 0;
-    border-left: 3px solid #1a7340;
-    font-size: 12px;
-  }
-  /* Signal reasoning box */
-  .reasoning-box {
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin: 8px 0;
-    background: var(--secondary-background-color, #f8f9fa);
-    border: 1px solid var(--secondary-background-color, #e9ecef);
-    font-size: 13px;
-    line-height: 1.6;
-  }
-  /* Visual metric cards — theme-aware dark-style panels */
-  .vm-card {
-    border-radius: 10px;
-    padding: 14px 10px 10px;
-    text-align: center;
-    border: 1px solid var(--secondary-background-color, #e0e0e0);
-    background: var(--secondary-background-color, #f8f9fa);
-  }
-  .vm-label {
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
     font-size: 11px;
-    font-weight: 600;
+  }
+  .ind-row:last-child { border-bottom: none; }
+  .ind-label { color: #6b7a94; }
+
+  /* ── Trade level cards ── */
+  .trade-card {
+    background: #111315;
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .trade-label {
+    font-size: 9px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-color-muted, #6c757d);
+    letter-spacing: 0.15em;
+    color: #6b7a94;
     margin-bottom: 6px;
   }
-  .vm-value {
-    font-size: 22px;
+  .trade-value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
     font-weight: 700;
-    margin: 4px 0 2px;
   }
-  .vm-sub {
-    font-size: 11px;
-    color: var(--text-color-muted, #6c757d);
-  }
-  .disclaimer {
-    font-size: 11px;
-    color: var(--text-color-muted, #999);
-    margin-top: 1rem;
-    padding: 10px 14px;
-    background: var(--secondary-background-color, #f8f9fa);
+  .trade-sub { font-size: 9px; margin-top: 4px; }
+
+  /* ── Sidebar stock card ── */
+  .sb-stock-card {
+    background: #111315;
+    border: 1px solid rgba(189,255,0,0.3);
     border-radius: 8px;
+    padding: 12px;
+    margin: 6px 0;
+    font-size: 12px;
   }
-  /* Toggle buttons */
-  div[data-testid="column"] button {
-    border-radius: 20px !important;
-    font-size: 12px !important;
+
+  /* ── Signal history table ── */
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .hist-table th {
+    text-align: left;
+    padding: 6px 8px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #6b7a94;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
   }
+  .hist-table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .hist-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* ── Section headers ── */
+  .section-label {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: #6b7a94;
+    margin-bottom: 12px;
+  }
+
+  /* ── Pulse animation ── */
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .live-dot { animation: pulse-dot 1.5s infinite; display:inline-block; width:6px; height:6px; border-radius:50%; background:#BDFF00; vertical-align:middle; }
+
+  /* ── Marquee ── */
+  @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+  .animate-marquee { animation: marquee 25s linear infinite; display:flex; gap:2.5rem; white-space:nowrap; }
+
+  /* ── Streamlit column gaps ── */
+  [data-testid="column"] { padding: 0 4px !important; }
+  [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+
+  /* ── Spinner color ── */
+  [data-testid="stSpinner"] { color: #BDFF00 !important; }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #292a2a; border-radius: 10px; }
+
+  /* ── Hide streamlit top padding ── */
+  .appview-container .main .block-container { padding-top: 0.5rem; }
+
+  /* ── st.expander dark ── */
+  [data-testid="stExpander"] {
+    background: #111315 !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 10px !important;
+  }
+  [data-testid="stExpander"] summary { color: #e3e2e2 !important; font-size: 11px !important; font-weight: 700 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Config ────────────────────────────────────────────────────
+# ── Config ─────────────────────────────────────────────────────
 AV_KEY   = ""
 TG_TOKEN = ""
 TG_CHAT  = ""
@@ -161,6 +296,8 @@ STOCKS = {
     "TATAMOTORS": {"name": "Tata Motors",    "industry": "Automobile", "yf": "TATAMOTORS.NS", "av": "TATAMOTORS", "fullName": "Tata Motors Ltd.",        "tv": "NSE:TATAMOTORS"},
     "HAL":        {"name": "HAL",            "industry": "Defence",    "yf": "HAL.NS",        "av": "HAL",        "fullName": "Hindustan Aeronautics",   "tv": "NSE:HAL"},
     "JUBLFOOD":   {"name": "Jubilant Foods", "industry": "Retail/QSR", "yf": "JUBLFOOD.NS",   "av": "JUBLFOOD",   "fullName": "Jubilant Foodworks Ltd.", "tv": "NSE:JUBLFOOD"},
+    "BAJAJ-AUTO": {"name": "Bajaj Auto",     "industry": "Automobile", "yf": "BAJAJ-AUTO.NS", "av": "BAJAJ-AUTO", "fullName": "Bajaj Auto Ltd.",         "tv": "NSE:BAJAJ-AUTO"},
+    "RELIANCE":   {"name": "Reliance Ind",   "industry": "FMCG",       "yf": "RELIANCE.NS",   "av": "RELIANCE",   "fullName": "Reliance Industries",     "tv": "NSE:RELIANCE"},
 }
 
 TIMEFRAMES = {
@@ -171,16 +308,17 @@ TIMEFRAMES = {
     "9M": {"label": "6-9 Months", "yf_period": "9mo", "yf_interval": "1wk", "av_func": "TIME_SERIES_WEEKLY",   "av_interval": "",       "tv_interval": "W"},
 }
 
-SIGNAL_CONFIG = {
-    "STRONG BUY":  {"color": "#1a7340", "bg": "#d4edda", "border": "#28a745", "icon": "▲▲"},
-    "BUY":         {"color": "#155724", "bg": "#d4edda", "border": "#5cb85c", "icon": "▲"},
-    "SHORT SELL":  {"color": "#721c24", "bg": "#f8d7da", "border": "#dc3545", "icon": "▼▼"},
-    "SELL":        {"color": "#721c24", "bg": "#f8d7da", "border": "#e06c75", "icon": "▼"},
-    "HOLD":        {"color": "#004085", "bg": "#cce5ff", "border": "#007bff", "icon": "▬"},
-    "WAIT":        {"color": "#856404", "bg": "#fff3cd", "border": "#ffc107", "icon": "◌"},
+# signal → (text color, bg class, icon)
+SIGNAL_V2 = {
+    "STRONG BUY":  {"color": "#BDFF00", "cls": "signal-buy",  "icon": "▲▲", "conf_bg": "rgba(189,255,0,0.12)",  "conf_color": "#BDFF00"},
+    "BUY":         {"color": "#BDFF00", "cls": "signal-buy",  "icon": "▲",  "conf_bg": "rgba(189,255,0,0.12)",  "conf_color": "#BDFF00"},
+    "SHORT SELL":  {"color": "#ff4d6a", "cls": "signal-sell", "icon": "▼▼", "conf_bg": "rgba(255,77,106,0.12)", "conf_color": "#ff4d6a"},
+    "SELL":        {"color": "#ff4d6a", "cls": "signal-sell", "icon": "▼",  "conf_bg": "rgba(255,77,106,0.12)", "conf_color": "#ff4d6a"},
+    "HOLD":        {"color": "#4d9fff", "cls": "signal-hold", "icon": "▬",  "conf_bg": "rgba(77,159,255,0.12)", "conf_color": "#4d9fff"},
+    "WAIT":        {"color": "#f5a623", "cls": "signal-wait", "icon": "◌",  "conf_bg": "rgba(245,166,35,0.12)", "conf_color": "#f5a623"},
 }
 
-# ── Session state ─────────────────────────────────────────────
+# ── Session state ──────────────────────────────────────────────
 for key, default in [
     ("signal_history", {}),
     ("chart_show_ema50", True),
@@ -190,7 +328,7 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ── Helpers ───────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────
 def fmt_inr(val):
     if val is None: return "—"
     return f"₹{float(val):,.2f}"
@@ -211,7 +349,7 @@ def clean_list(lst):
             pass
     return result
 
-# ── Technical Indicators ──────────────────────────────────────
+# ── Technical Indicators ───────────────────────────────────────
 def calc_rsi(closes, period=14):
     if len(closes) < period + 1: return None
     gains, losses = 0.0, 0.0
@@ -236,32 +374,6 @@ def calc_ema(closes, period):
         ema = price * k + ema * (1 - k)
     return ema
 
-def calc_ema_series(closes, period):
-    if len(closes) < period:
-        return [None] * len(closes)
-    k = 2 / (period + 1)
-    result = [None] * (period - 1)
-    ema = sum(closes[:period]) / period
-    result.append(ema)
-    for price in closes[period:]:
-        ema = price * k + ema * (1 - k)
-        result.append(ema)
-    return result
-
-def calc_bb_series(closes, period=20):
-    upper_s, mid_s, lower_s = [], [], []
-    for i in range(len(closes)):
-        if i < period - 1:
-            upper_s.append(None); mid_s.append(None); lower_s.append(None)
-        else:
-            sl  = closes[i - period + 1: i + 1]
-            mid = sum(sl) / period
-            std = math.sqrt(sum((v - mid)**2 for v in sl) / period)
-            upper_s.append(mid + 2 * std)
-            mid_s.append(mid)
-            lower_s.append(mid - 2 * std)
-    return upper_s, mid_s, lower_s
-
 def calc_macd(closes):
     if len(closes) < 26:
         return {"macd": None, "signal": None, "hist": None, "trend": "N/A"}
@@ -283,7 +395,7 @@ def calc_bollinger(closes, period=20):
     lower = mid - 2 * std
     last  = closes[-1]
     bpct  = ((last - lower) / (upper - lower) * 100) if (upper - lower) > 0 else 50
-    position = "Near Upper (Overbought)" if bpct > 80 else "Near Lower (Oversold)" if bpct < 20 else "Mid Range"
+    position = "Near Upper" if bpct > 80 else "Near Lower" if bpct < 20 else "Mid Range"
     return {"upper": upper, "mid": mid, "lower": lower, "pct": bpct, "position": position}
 
 def calc_atr(highs, lows, closes, period=14):
@@ -320,9 +432,9 @@ def detect_candlestick(opens, highs, lows, closes):
     upper_wick = highs[-1] - max(closes[-1], opens[-1])
     lower_wick = min(closes[-1], opens[-1]) - lows[-1]
     if lower_wick > body * 2 and upper_wick < body * 0.3: return "Hammer (Bullish reversal)"
-    if upper_wick > body * 2 and lower_wick < body * 0.3: return "Shooting Star (Bearish reversal)"
-    if closes[-1] > closes[-2] > closes[-3] and closes[-1] > opens[-1]: return "Three White Soldiers (Strong Bullish)"
-    if closes[-1] < closes[-2] < closes[-3] and closes[-1] < opens[-1]: return "Three Black Crows (Strong Bearish)"
+    if upper_wick > body * 2 and lower_wick < body * 0.3: return "Shooting Star (Bearish)"
+    if closes[-1] > closes[-2] > closes[-3] and closes[-1] > opens[-1]: return "Three White Soldiers"
+    if closes[-1] < closes[-2] < closes[-3] and closes[-1] < opens[-1]: return "Three Black Crows"
     if body < rng * 0.1: return "Doji (Indecision)"
     if closes[-1] > closes[-2] and closes[-1] > opens[-1]: return "Bullish Engulfing"
     if closes[-1] < closes[-2] and closes[-1] < opens[-1]: return "Bearish Engulfing"
@@ -351,9 +463,6 @@ def compute_all(price_data):
         "ema200":        calc_ema(c, min(200, len(c))),
         "ema9":          calc_ema(c, min(9,   len(c))),
         "ema21":         calc_ema(c, min(21,  len(c))),
-        "ema50_series":  calc_ema_series(c, min(50,  len(c))),
-        "ema200_series": calc_ema_series(c, min(200, len(c))),
-        "bb_series":     calc_bb_series(c),
         "atr":           calc_atr(h, l, c),
         "stoch_k":       sk,
         "stoch_d":       sd,
@@ -364,13 +473,13 @@ def compute_all(price_data):
         "candles":       len(c),
     }
 
-# ── Signal Engine ─────────────────────────────────────────────
+# ── Signal Engine ──────────────────────────────────────────────
 def generate_signal(closes, highs, lows, volumes, ind):
-    rsi     = ind["rsi"];  macd    = ind["macd"]
-    boll    = ind["bollinger"]; ema50   = ind["ema50"]
-    ema200  = ind["ema200"];    atr     = ind["atr"]
-    trend   = ind["trend"];     stoch_k = ind["stoch_k"]
-    curr    = closes[-1]
+    rsi    = ind["rsi"];  macd   = ind["macd"]
+    boll   = ind["bollinger"]; ema50  = ind["ema50"]
+    ema200 = ind["ema200"];    atr    = ind["atr"]
+    trend  = ind["trend"];     stoch_k = ind["stoch_k"]
+    curr   = closes[-1]
     score = 0; max_score = 0; votes = []
 
     max_score += 2
@@ -474,22 +583,13 @@ def generate_signal(closes, highs, lows, volumes, ind):
         "hold_duration": duration_map.get(signal, "—"), "atr": round(atr, 2),
     }
 
-# ── Signal Reasoning (2-line plain English summary) ──────────
 def build_signal_reasoning(sig, ind, price_data):
-    signal   = sig["signal"]
-    rsi      = ind["rsi"]
-    macd     = ind["macd"]
-    ema50    = ind["ema50"]
-    ema200   = ind["ema200"]
-    trend    = ind["trend"]
-    boll     = ind["bollinger"]
-    curr     = price_data["current_price"]
-    votes    = sig["votes"]
-
-    # Build 2-line reasoning
-    bullish_reasons  = [v for v in votes if "Bullish" in v or "Uptrend" in v or "confirm" in v and "bearish" not in v.lower()]
-    bearish_reasons  = [v for v in votes if "Bearish" in v or "Downtrend" in v]
-
+    signal = sig["signal"]
+    rsi    = ind["rsi"]
+    trend  = ind["trend"]
+    votes  = sig["votes"]
+    bullish_reasons = [v for v in votes if "Bullish" in v or "Uptrend" in v]
+    bearish_reasons = [v for v in votes if "Bearish" in v or "Downtrend" in v]
     if signal in ("STRONG BUY", "BUY"):
         top = bullish_reasons[:2] if bullish_reasons else votes[:2]
         line1 = f"Signal driven by: {top[0].split('(')[0].strip()}" if top else "Multiple bullish indicators aligned."
@@ -500,21 +600,19 @@ def build_signal_reasoning(sig, ind, price_data):
         line2 = f"Also: {top[1].split('(')[0].strip()}." if len(top) > 1 else f"Trend: {trend}."
     elif signal == "HOLD":
         line1 = "Mixed signals — neither clearly bullish nor bearish."
-        line2 = f"Price is ranging. RSI at {rsi:.0f} — neutral zone." if rsi else "Waiting for a clearer trend to emerge."
+        line2 = f"Price is ranging. RSI at {rsi:.0f} — neutral zone." if rsi else "Waiting for a clearer trend."
     else:
         line1 = "Insufficient directional conviction across indicators."
         line2 = "Consider waiting for RSI breakout or a MACD crossover before entering."
-
     return line1, line2
 
-# ── News Reference Link ───────────────────────────────────────
 def get_news_link(ticker_symbol, full_name):
     encoded = full_name.replace(" ", "+")
-    google_news = f"https://news.google.com/search?q={encoded}+NSE+stock&hl=en-IN&gl=IN"
-    moneycontrol = f"https://www.moneycontrol.com/stocks/cptmarket/compsearchnew.php?search_data={ticker_symbol}&cid=&mbsearch_str=&type_search=News&news_op=&tagnews=y&sel_news=MNC"
+    google_news  = f"https://news.google.com/search?q={encoded}+NSE+stock&hl=en-IN&gl=IN"
+    moneycontrol = f"https://www.moneycontrol.com/stocks/cptmarket/compsearchnew.php?search_data={ticker_symbol}&type_search=News"
     return google_news, moneycontrol
 
-# ── Data Fetching ─────────────────────────────────────────────
+# ── Data Fetching ──────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_via_yfinance(yf_ticker, period, interval):
     try:
@@ -579,7 +677,6 @@ def fetch_via_yfinance(yf_ticker, period, interval):
         dates   = [str(d)[:16] for d in hist.index.tolist()]
         curr    = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
 
-        # Fundamentals with multiple fallback keys
         def get_info(*keys):
             for k in keys:
                 v = info.get(k)
@@ -617,48 +714,12 @@ def fetch_via_yfinance(yf_ticker, period, interval):
         st.warning(f"yfinance error: {e}")
         return None
 
-@st.cache_data(ttl=300)
-def fetch_via_alphavantage(av_symbol, av_func, av_interval):
-    url = f"https://www.alphavantage.co/query?function={av_func}&symbol={av_symbol}&apikey={AV_KEY}&outputsize=compact"
-    if av_interval: url += f"&interval={av_interval}"
-    try:
-        r    = requests.get(url, timeout=15); r.raise_for_status()
-        data = r.json()
-        key  = next((k for k in data if "Time Series" in k), None)
-        if not key: return None
-        series = data[key]; dates = sorted(series.keys())
-        opens, highs, lows, closes, volumes = [], [], [], [], []
-        for d in dates:
-            row = series[d]
-            opens.append(float(row["1. open"]));   highs.append(float(row["2. high"]))
-            lows.append(float(row["3. low"]));     closes.append(float(row["4. close"]))
-            volumes.append(float(row.get("5. volume", 0)))
-        curr = closes[-1]; prev = closes[-2] if len(closes) >= 2 else curr
-        return {
-            "source": "Alpha Vantage", "current_price": curr, "prev_close": prev,
-            "open": opens[-1], "high": highs[-1], "low": lows[-1], "volume": volumes[-1],
-            "change": curr - prev, "change_pct": ((curr-prev)/prev*100) if prev else 0,
-            "time": datetime.now().strftime("%H:%M"),
-            "opens": opens, "highs": highs, "lows": lows, "closes": closes,
-            "volumes": volumes, "dates": dates,
-            "pe_ratio": None, "eps": None, "market_cap": None, "revenue_growth": None,
-            "debt_equity": None, "roe": None, "dividend_yield": None,
-            "52w_high": None, "52w_low": None, "sector": None,
-            "book_value": None, "price_to_book": None, "current_ratio": None, "profit_margins": None,
-        }
-    except Exception as e:
-        st.warning(f"Alpha Vantage error: {e}")
-        return None
-
 def fetch_market_data(ticker, tf_key):
     tf    = TIMEFRAMES[tf_key]
     stock = STOCKS[ticker]
     data  = fetch_via_yfinance(stock["yf"], tf["yf_period"], tf["yf_interval"])
-    if not data:
-        data = fetch_via_alphavantage(stock["av"], tf["av_func"], tf["av_interval"])
     return data
 
-# ── Telegram ──────────────────────────────────────────────────
 def send_telegram(message):
     url = "https://api.telegram.org/bot" + TG_TOKEN + "/sendMessage"
     try:
@@ -667,7 +728,6 @@ def send_telegram(message):
     except:
         return False
 
-# ── Signal History ────────────────────────────────────────────
 def update_signal_history(ticker, rec):
     if ticker not in st.session_state.signal_history:
         st.session_state.signal_history[ticker] = []
@@ -676,72 +736,32 @@ def update_signal_history(ticker, rec):
     else: h.append(rec)
     st.session_state.signal_history[ticker] = h[-10:]
 
-def render_signal_history(ticker):
-    history = st.session_state.signal_history.get(ticker, [])
-    if not history:
-        st.caption("No history yet — run Analyse a few times to build it.")
-        return
-    rows_html = ""
-    for i, h in enumerate(reversed(history)):
-        sig = h["signal"]; sc = SIGNAL_CONFIG.get(sig, SIGNAL_CONFIG["HOLD"])
-        badge = f'<span style="background:{sc["bg"]};color:{sc["color"]};border:1px solid {sc["border"]};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">{sc["icon"]} {sig}</span>'
-        chg_c = "#1a7340" if h.get("change_pct", 0) >= 0 else "#721c24"
-        chg_s = "+" if h.get("change_pct", 0) >= 0 else ""
-        bg    = "background:#f8f9fa" if i % 2 == 0 else ""
-        rows_html += f"""<tr style="{bg}">
-            <td style="padding:6px 10px;font-size:12px">{h['time']}</td>
-            <td style="padding:6px 10px;font-size:12px"><b>{h['tf']}</b></td>
-            <td style="padding:6px 10px;font-size:12px">₹{h['price']:,.2f} <span style="color:{chg_c};font-size:11px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
-            <td style="padding:6px 10px">{badge}</td>
-            <td style="padding:6px 10px;font-size:12px;color:{chg_c}">{h.get('regime','—')}</td>
-            <td style="padding:6px 10px;font-size:12px">₹{h.get('target',0):,.2f}</td>
-            <td style="padding:6px 10px;font-size:12px">₹{h.get('stop',0):,.2f}</td>
-            <td style="padding:6px 10px;font-size:12px">{h.get('prob',0):.0f}%</td>
-        </tr>"""
-    st.markdown(f"""
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#f1f3f5;border-bottom:2px solid #dee2e6">
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Time</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">TF</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Price</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Signal</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Regime</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Target</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Stop</th>
-        <th style="padding:6px 10px;text-align:left;font-size:11px;color:#6c757d;text-transform:uppercase">Prob</th>
-      </tr></thead>
-      <tbody>{rows_html}</tbody>
-    </table>""", unsafe_allow_html=True)
+# ── UI Components ──────────────────────────────────────────────
 
-# ── UI Helpers ────────────────────────────────────────────────
-def metric_card(label, value, sub=None, value_color="#212529"):
-    sub_html = f'<div class="mb-card-sub">{sub}</div>' if sub else ""
-    st.markdown(f"""
-    <div class="mb-card">
-      <div class="mb-card-label">{label}</div>
-      <div class="mb-card-value" style="color:{value_color}">{value}</div>
-      {sub_html}
-    </div>""", unsafe_allow_html=True)
+def ohlcv_card(label, value, color="#e3e2e2"):
+    return f"""<div class="ohlcv-card">
+      <div class="ohlcv-label">{label}</div>
+      <div class="ohlcv-value" style="color:{color}">{value}</div>
+    </div>"""
 
-def indicator_row(label, value, reading="", reading_color="inherit"):
-    reading_html = f'<span style="color:{reading_color};font-weight:600">{reading}</span>' if reading else ""
-    st.markdown(f"""
-    <div class="ind-row">
+def trade_card(label, value, sub="", value_color="#e3e2e2", sub_color="#6b7a94"):
+    return f"""<div class="trade-card">
+      <div class="trade-label">{label}</div>
+      <div class="trade-value" style="color:{value_color}">{value}</div>
+      <div class="trade-sub" style="color:{sub_color}">{sub}</div>
+    </div>"""
+
+def indicator_row_v2(label, value, badge_text="", badge_cls="ib-neut"):
+    badge = f'<span class="ib {badge_cls}">{badge_text}</span>' if badge_text else ""
+    return f"""<div class="ind-row">
       <span class="ind-label">{label}</span>
-      <span>{value} {reading_html}</span>
-    </div>""", unsafe_allow_html=True)
+      <span class="mono" style="color:#e3e2e2">{value}{badge}</span>
+    </div>"""
 
-# ── TradingView Widget Chart ──────────────────────────────────
-def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, show_bb):
-    studies = []
-    if show_ema50:  studies.append('"MAExp@tv-basicstudies"')
-    if show_ema200: studies.append('"MAExp@tv-basicstudies"')
-    if show_bb:     studies.append('"BB@tv-basicstudies"')
-    studies_str = "[" + ",".join(studies) + "]"
-
+def render_tradingview_chart(tv_symbol, tv_interval):
     widget_html = f"""
-    <div class="tradingview-widget-container" style="height:520px;width:100%">
-      <div id="tradingview_chart" style="height:100%;width:100%"></div>
+    <div style="height:420px;width:100%;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)">
+      <div id="tv_chart" style="height:100%;width:100%"></div>
       <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
       <script type="text/javascript">
       new TradingView.widget({{
@@ -749,242 +769,313 @@ def render_tradingview_chart(tv_symbol, tv_interval, show_ema50, show_ema200, sh
         "symbol": "{tv_symbol}",
         "interval": "{tv_interval}",
         "timezone": "Asia/Kolkata",
-        "theme": "light",
+        "theme": "dark",
         "style": "1",
         "locale": "en",
-        "toolbar_bg": "#f1f3f6",
+        "toolbar_bg": "#0a0b0d",
         "enable_publishing": false,
         "withdateranges": true,
         "hide_side_toolbar": false,
         "allow_symbol_change": false,
         "save_image": false,
-        "studies": {studies_str},
-        "container_id": "tradingview_chart",
+        "container_id": "tv_chart",
         "hide_top_toolbar": false,
         "hide_legend": false,
         "show_popup_button": true,
         "popup_width": "1000",
-        "popup_height": "650"
+        "popup_height": "650",
+        "backgroundColor": "rgba(10,11,13,1)",
+        "gridColor": "rgba(255,255,255,0.04)"
       }});
       </script>
     </div>"""
-    st.components.v1.html(widget_html, height=530, scrolling=False)
+    st.components.v1.html(widget_html, height=430, scrolling=False)
 
-# ── Visual Metrics (theme-aware HTML/SVG) ─────────────────────
 def render_visual_metrics(rsi_val, prob_val, rr_ratio, closes, period_return):
-    rsi_color  = "#dc3545" if (rsi_val or 50) > 70 else "#1a7340" if (rsi_val or 50) < 30 else "#f59e0b"
+    rsi_color  = "#ff4d6a" if (rsi_val or 50) > 70 else "#BDFF00" if (rsi_val or 50) < 30 else "#f5a623"
     rsi_label  = "Overbought" if (rsi_val or 50) > 70 else "Oversold" if (rsi_val or 50) < 30 else "Neutral"
     rsi_disp   = f"{rsi_val:.1f}" if rsi_val else "—"
-    prob_color = "#1a7340" if prob_val >= 65 else "#f59e0b" if prob_val >= 45 else "#dc3545"
-    rr_color   = "#1a7340" if rr_ratio >= 2 else "#f59e0b" if rr_ratio >= 1 else "#dc3545"
-    pr_color   = "#1a7340" if (period_return or 0) >= 0 else "#dc3545"
+    prob_color = "#BDFF00" if prob_val >= 65 else "#f5a623" if prob_val >= 45 else "#ff4d6a"
+    rr_color   = "#BDFF00" if rr_ratio >= 2 else "#f5a623" if rr_ratio >= 1 else "#ff4d6a"
+    pr_color   = "#BDFF00" if (period_return or 0) >= 0 else "#ff4d6a"
     pr_text    = fmt_pct(period_return) if period_return is not None else "—"
 
-    def gauge_arc(val, max_val, color, label, disp, sub):
+    def gauge_svg(val, max_val, color, disp, sub):
         pct   = min(val / max_val, 1.0)
         angle = pct * 180 - 180
         rad   = math.radians(angle)
-        nx    = 60 + 38 * math.cos(rad)
-        ny    = 52 + 38 * math.sin(rad)
-        ex    = 60 + 50 * math.cos(math.radians(pct * 180 - 180))
-        ey    = 52 + 50 * math.sin(math.radians(pct * 180 - 180))
+        nx    = 40 + 26 * math.cos(rad)
+        ny    = 40 + 26 * math.sin(rad)
+        ex    = 8 + (64) * pct
         large = 1 if pct > 0.5 else 0
+        ex2   = 8 + 32 * math.cos(math.radians(pct * 180 - 180)) + 32
+        ey2   = 40 + 32 * math.sin(math.radians(pct * 180 - 180))
         return f"""
-        <div class="vm-card">
-          <div class="vm-label">{label}</div>
-          <svg viewBox="0 0 120 62" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:130px">
-            <path d="M10 52 A50 50 0 0 1 110 52" fill="none" stroke="#e9ecef" stroke-width="9" stroke-linecap="round"/>
-            <path d="M10 52 A50 50 0 {large} 1 {ex:.1f} {ey:.1f}" fill="none" stroke="{color}" stroke-width="9" stroke-linecap="round"/>
-            <line x1="60" y1="52" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="60" cy="52" r="4" fill="{color}"/>
-          </svg>
-          <div class="vm-value" style="color:{color}">{disp}</div>
-          <div class="vm-sub">{sub}</div>
-        </div>"""
+        <svg viewBox="0 0 80 44" style="width:65px;margin:0 auto;display:block">
+          <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke="#1e2022" stroke-width="7" stroke-linecap="round"/>
+          <path d="M8 40 A32 32 0 {large} 1 {ex2:.1f} {ey2:.1f}" fill="none" stroke="{color}" stroke-width="7" stroke-linecap="round"/>
+          <line x1="40" y1="40" x2="{nx:.1f}" y2="{ny:.1f}" stroke="{color}" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="40" r="3" fill="{color}"/>
+        </svg>
+        <p style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:900;color:{color};text-align:center;margin:2px 0">{disp}</p>
+        <p style="font-size:9px;color:#6b7a94;text-align:center">{sub}</p>"""
 
-    rsi_html  = gauge_arc(rsi_val or 50, 100, rsi_color, "RSI (14)", rsi_disp, rsi_label)
-    prob_html = gauge_arc(prob_val, 100, prob_color, "Success Prob.", f"{prob_val:.0f}%",
-                          "High confidence" if prob_val >= 65 else "Moderate" if prob_val >= 45 else "Low confidence")
+    rsi_svg  = gauge_svg(rsi_val or 50, 100, rsi_color, rsi_disp, rsi_label)
+    prob_svg = gauge_svg(prob_val, 100, prob_color, f"{prob_val:.0f}%",
+                         "High confidence" if prob_val >= 65 else "Moderate" if prob_val >= 45 else "Low confidence")
 
-    # Donut
     total = 1 + max(rr_ratio, 0.01)
-    circ  = 2 * math.pi * 28
+    circ  = 2 * math.pi * 20
     rd    = (1 / total) * circ
     rwd   = (max(rr_ratio, 0.01) / total) * circ
-    rr_html = f"""
-    <div class="vm-card">
-      <div class="vm-label">Risk : Reward</div>
-      <svg viewBox="0 0 80 76" xmlns="http://www.w3.org/2000/svg" style="width:80px;height:76px;display:block;margin:0 auto">
-        <circle cx="40" cy="40" r="28" fill="none" stroke="#dc3545" stroke-width="9"
-                stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 40 40)"/>
-        <circle cx="40" cy="40" r="28" fill="none" stroke="#1a7340" stroke-width="9"
-                stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 40 40)"/>
-        <text x="40" y="37" text-anchor="middle" font-size="8.5" fill="{rr_color}" font-weight="700" font-family="sans-serif">1:{rr_ratio:.1f}</text>
-        <text x="40" y="48" text-anchor="middle" font-size="7" fill="#6c757d" font-family="sans-serif">R:R</text>
-      </svg>
-      <div class="vm-value" style="color:{rr_color};font-size:16px">1 : {rr_ratio:.2f}</div>
-      <div class="vm-sub">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</div>
-    </div>"""
+    rr_svg = f"""
+    <svg viewBox="0 0 56 56" style="width:48px;margin:4px auto 0;display:block">
+      <circle cx="28" cy="28" r="20" fill="none" stroke="#ff4d6a" stroke-width="7"
+              stroke-dasharray="{rd:.1f} {circ:.1f}" stroke-dashoffset="0" transform="rotate(-90 28 28)"/>
+      <circle cx="28" cy="28" r="20" fill="none" stroke="#BDFF00" stroke-width="7"
+              stroke-dasharray="{rwd:.1f} {circ:.1f}" stroke-dashoffset="{-rd:.1f}" transform="rotate(-90 28 28)"/>
+      <text x="28" y="25" text-anchor="middle" font-family="IBM Plex Mono" font-size="6" fill="#e3e2e2" font-weight="700">1:{rr_ratio:.1f}</text>
+      <text x="28" y="34" text-anchor="middle" font-family="IBM Plex Mono" font-size="5.5" fill="#6b7a94">R:R</text>
+    </svg>
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:900;color:{rr_color};text-align:center;margin:4px 0">1 : {rr_ratio:.2f}</p>
+    <p style="font-size:9px;color:#6b7a94;text-align:center">{'Good ≥2x' if rr_ratio >= 2 else 'Fair 1–2x' if rr_ratio >= 1 else 'Poor <1x'}</p>"""
 
     # Sparkline
     spark_svg = ""
     if closes and len(closes) > 1:
         mn, mx = min(closes), max(closes)
         rng    = mx - mn if mx != mn else 1
-        w, h   = 180, 40
+        w, h   = 70, 34
         pts    = [f"{int(i/(len(closes)-1)*w)},{int(h-((c-mn)/rng)*h)}" for i, c in enumerate(closes)]
-        spark_svg = f"""<svg viewBox="0 0 {w} {h}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:42px;display:block">
-          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.8" stroke-linejoin="round"/>
+        spark_svg = f"""<svg viewBox="0 0 {w} {h}" style="width:65px;height:34px;display:block;margin:4px auto 0">
+          <polyline points="{' '.join(pts)}" fill="none" stroke="{pr_color}" stroke-width="1.5" stroke-linejoin="round"/>
         </svg>"""
 
-    spark_html = f"""
-    <div class="vm-card">
-      <div class="vm-label">Period Return</div>
-      <div style="padding:4px 6px 0">{spark_svg}</div>
-      <div class="vm-value" style="color:{pr_color}">{pr_text}</div>
-      <div class="vm-sub">{'Positive' if (period_return or 0) >= 0 else 'Negative'} over period</div>
-    </div>"""
+    spark_html = f"""{spark_svg}
+    <p style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:900;color:{pr_color};text-align:center;margin:2px 0">{pr_text}</p>
+    <p style="font-size:9px;color:#6b7a94;text-align:center">{'Positive' if (period_return or 0) >= 0 else 'Negative'} period</p>"""
+
+    card_style = "background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px;text-align:center"
+    label_style = "font-size:9px;color:#6b7a94;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;margin-bottom:4px"
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(rsi_html,   unsafe_allow_html=True)
-    with c2: st.markdown(prob_html,  unsafe_allow_html=True)
-    with c3: st.markdown(rr_html,    unsafe_allow_html=True)
-    with c4: st.markdown(spark_html, unsafe_allow_html=True)
-
-# ── Chart Toggle Bar ──────────────────────────────────────────
-def render_chart_toggle_bar():
-    c1, c2, c3, _, _, _, _ = st.columns([1.2, 1.2, 1.8, 1, 1, 1, 1])
     with c1:
-        lbl = "🟡 EMA 50 ✓" if st.session_state.chart_show_ema50 else "🟡 EMA 50"
-        if st.button(lbl, key="t_ema50", use_container_width=True):
-            st.session_state.chart_show_ema50 = not st.session_state.chart_show_ema50; st.rerun()
+        st.markdown(f'<div style="{card_style}"><p style="{label_style}">RSI (14)</p>{rsi_svg}</div>', unsafe_allow_html=True)
     with c2:
-        lbl = "🟣 EMA 200 ✓" if st.session_state.chart_show_ema200 else "🟣 EMA 200"
-        if st.button(lbl, key="t_ema200", use_container_width=True):
-            st.session_state.chart_show_ema200 = not st.session_state.chart_show_ema200; st.rerun()
+        st.markdown(f'<div style="{card_style}"><p style="{label_style}">Success Prob.</p>{prob_svg}</div>', unsafe_allow_html=True)
     with c3:
-        lbl = "🔵 Bollinger Bands ✓" if st.session_state.chart_show_bb else "🔵 Bollinger Bands"
-        if st.button(lbl, key="t_bb", use_container_width=True):
-            st.session_state.chart_show_bb = not st.session_state.chart_show_bb; st.rerun()
+        st.markdown(f'<div style="{card_style}"><p style="{label_style}">Risk : Reward</p>{rr_svg}</div>', unsafe_allow_html=True)
+    with c4:
+        st.markdown(f'<div style="{card_style}"><p style="{label_style}">Period Return</p>{spark_html}</div>', unsafe_allow_html=True)
 
-# ── Main App ──────────────────────────────────────────────────
+def render_signal_history(ticker):
+    history = st.session_state.signal_history.get(ticker, [])
+    if not history:
+        st.markdown('<p style="font-size:11px;color:#6b7a94;padding:12px 0">No history yet — run Analyse to build it.</p>', unsafe_allow_html=True)
+        return
+
+    sig_colors = {
+        "STRONG BUY": ("#BDFF00", "ib-bull"), "BUY": ("#BDFF00", "ib-bull"),
+        "SHORT SELL": ("#ff4d6a", "ib-bear"), "SELL": ("#ff4d6a", "ib-bear"),
+        "HOLD": ("#4d9fff", "ib-neut"), "WAIT": ("#f5a623", "ib-warn"),
+    }
+    rows = ""
+    for h in reversed(history):
+        sig = h["signal"]
+        sc  = sig_colors.get(sig, ("#6b7a94", "ib-neut"))
+        chg_c = "#BDFF00" if h.get("change_pct", 0) >= 0 else "#ff4d6a"
+        chg_s = "+" if h.get("change_pct", 0) >= 0 else ""
+        rows += f"""<tr>
+          <td style="color:#6b7a94">{h['time']}</td>
+          <td style="font-weight:700">{h['tf']}</td>
+          <td>₹{h['price']:,.2f} <span style="color:{chg_c};font-size:9px">({chg_s}{h.get('change_pct',0):.2f}%)</span></td>
+          <td><span class="ib {sc[1]}" style="font-size:9px;padding:3px 7px">{h['signal']}</span></td>
+          <td style="color:#6b7a94">{h.get('regime','—')}</td>
+          <td style="color:#BDFF00">₹{h.get('target',0):,.2f}</td>
+          <td style="color:#ff4d6a">₹{h.get('stop',0):,.2f}</td>
+          <td>{h.get('prob',0):.0f}%</td>
+        </tr>"""
+
+    st.markdown(f"""
+    <table class="hist-table">
+      <thead><tr>
+        <th>Time</th><th>TF</th><th>Price</th><th>Signal</th>
+        <th>Regime</th><th>Target</th><th>Stop</th><th>Prob</th>
+      </tr></thead>
+      <tbody>{rows}</tbody>
+    </table>""", unsafe_allow_html=True)
+
+# ── Main ───────────────────────────────────────────────────────
 def main():
-    # ── Polished Sidebar ──────────────────────────────────────
+
+    # ── Sidebar ────────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("""<style>
-        [data-testid="stSidebarNav"] a p,
-        [data-testid="stSidebarNavLink"] span,
-        [data-testid="stSidebarNavItems"] a,
-        nav a span, nav a p {
-        }
-        </style>""", unsafe_allow_html=True)
+        # Logo
         st.markdown("""
-        <div style="text-align:center;padding:16px 8px 12px">
-          <div style="font-size:42px;margin-bottom:6px">🐂</div>
-          <div style="font-size:18px;font-weight:800;letter-spacing:0.04em;
-              background:linear-gradient(135deg,#58a6ff,#00ff88);
-              -webkit-background-clip:text;-webkit-text-fill-color:transparent;">
-              MB STOCK INTEL
-          </div>
-          <div style="font-size:11px;color:#6e7681;margin-top:4px;letter-spacing:0.08em;">
-              ENHANCED EDITION · NSE INDIA
+        <div style="padding:16px 4px 20px;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:10px;background:#b7f700;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🐂</div>
+            <div>
+              <div style="font-size:18px;font-weight:900;color:#a3e635;letter-spacing:-0.02em;font-family:'Manrope',sans-serif">BullzStock</div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.18em;color:#4b5563;margin-top:2px">NSE India · Signal Engine</div>
+            </div>
           </div>
         </div>""", unsafe_allow_html=True)
-        st.markdown("---")
 
+        # Nav (visual only — Streamlit handles routing)
+        st.markdown("""
+        <div style="margin-bottom:16px">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#4b5563;padding:0 4px;margin-bottom:6px">Navigation</div>
+          <div style="background:#1c1d1f;border-left:2px solid #a3e635;padding:8px 12px;border-radius:6px;margin-bottom:2px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#a3e635">📈 Stock Intel</span>
+          </div>
+          <a href="/2_Screener" style="text-decoration:none">
+            <div style="padding:8px 12px;border-radius:6px;margin-bottom:2px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:#4b5563">🔍 Screener</span>
+            </div>
+          </a>
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#4b5563;margin-bottom:6px">Filter by Industry</div>', unsafe_allow_html=True)
         industries = ["All"] + sorted(set(v["industry"] for v in STOCKS.values()))
-        chosen_ind = st.selectbox(
-            "🏭 Filter by Industry",
-            industries,
-            format_func=lambda x: f"{INDUSTRY_ICONS.get(x, '📌')} {x}"
-        )
+        chosen_ind = st.selectbox("Industry", industries,
+                                  format_func=lambda x: f"{INDUSTRY_ICONS.get(x,'📌')} {x}",
+                                  label_visibility="collapsed")
 
-        filtered      = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
+        filtered       = {k: v for k, v in STOCKS.items() if chosen_ind == "All" or v["industry"] == chosen_ind}
         ticker_options = list(filtered.keys())
-        ticker_labels  = [f"{INDUSTRY_ICONS.get(filtered[t]['industry'],'📌')} {t} — {filtered[t]['name']}" for t in ticker_options]
-        ticker_idx     = st.selectbox("📈 Select Stock", range(len(ticker_options)), format_func=lambda i: ticker_labels[i])
-        ticker         = ticker_options[ticker_idx]
+        ticker_labels  = [f"{t} — {filtered[t]['name']}" for t in ticker_options]
 
-        tf_key = st.radio(
-            "⏱ Timeframe",
-            list(TIMEFRAMES.keys()),
-            format_func=lambda k: TIMEFRAMES[k]["label"],
-            index=2,
-        )
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#4b5563;margin:10px 0 6px">Select Stock</div>', unsafe_allow_html=True)
+        ticker_idx = st.selectbox("Stock", range(len(ticker_options)),
+                                  format_func=lambda i: ticker_labels[i],
+                                  label_visibility="collapsed")
+        ticker = ticker_options[ticker_idx]
+
+        st.markdown('<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;color:#4b5563;margin:10px 0 6px">Timeframe</div>', unsafe_allow_html=True)
+        tf_key = st.radio("Timeframe", list(TIMEFRAMES.keys()),
+                          format_func=lambda k: TIMEFRAMES[k]["label"],
+                          index=2, label_visibility="collapsed")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        analyse = st.button("🔍  Analyse Now", use_container_width=True, type="primary")
+        analyse = st.button("⚡  Analyse Now", use_container_width=True, type="primary")
 
-        # Selected stock info card
+        # Selected stock card
         s = STOCKS[ticker]
         st.markdown(f"""
-        <div class="sb-stock-card">
-          <div style="font-weight:700;font-size:13px">{INDUSTRY_ICONS.get(s['industry'],'📌')} {ticker}</div>
-          <div style="font-size:12px;margin-top:2px">{s['fullName']}</div>
-          <div style="font-size:11px;color:#6c757d;margin-top:4px">
-            Industry: {s['industry']}<br>
-            Timeframe: {TIMEFRAMES[tf_key]['label']}
+        <div class="sb-stock-card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:start">
+            <div>
+              <div style="font-weight:900;font-size:13px;color:#e3e2e2">{ticker}</div>
+              <div style="font-size:10px;color:#6b7a94;margin-top:2px">{s['fullName']}</div>
+            </div>
+            <div style="font-size:9px;font-weight:700;background:rgba(189,255,0,0.1);color:#BDFF00;padding:2px 8px;border-radius:20px">
+              {s['industry']}
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;color:#6b7a94">
+            TF: <span style="color:#e3e2e2;font-weight:700">{TIMEFRAMES[tf_key]['label']}</span>
           </div>
         </div>""", unsafe_allow_html=True)
 
-        st.markdown("---")
+        # NSE info
         st.markdown("""
-        <div style="font-size:11px;color:#6c757d;line-height:1.7">
-          <b>🕐 NSE Hours</b><br>
-          Mon–Fri · 9:15 AM – 3:30 PM IST<br><br>
-          <b>📡 Data Sources</b><br>
-          Yahoo Finance · Alpha Vantage<br><br>
-          <b>📊 Indicators Used</b><br>
-          RSI · MACD · EMA 50/200<br>
-          Bollinger Bands · ATR · Stochastic
+        <div style="margin-top:16px;padding:12px;background:#111315;border:1px solid rgba(255,255,255,0.04);border-radius:8px">
+          <div style="font-size:9px;color:#6b7a94;line-height:1.9">
+            <div style="font-weight:700;color:#e3e2e2;margin-bottom:4px">🕐 NSE Hours</div>
+            Mon–Fri · 9:15 AM – 3:30 PM IST
+            <div style="font-weight:700;color:#e3e2e2;margin:8px 0 4px">📡 Data Sources</div>
+            Yahoo Finance · Alpha Vantage
+            <div style="font-weight:700;color:#e3e2e2;margin:8px 0 4px">📐 Indicators</div>
+            RSI · MACD · EMA 50/200<br>
+            Bollinger · ATR · Stochastic
+          </div>
         </div>""", unsafe_allow_html=True)
 
-        st.markdown("---")
-        if st.button("🗑️ Clear Signal History", use_container_width=True):
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🗑️ Clear Signal History", use_container_width=True, type="secondary"):
             st.session_state.signal_history = {}
             st.success("History cleared")
 
-    # ── Header ────────────────────────────────────────────────
+    # ── Top header bar ─────────────────────────────────────────
     st.markdown("""
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:0.5rem">
-      <div style="font-size:44px;line-height:1">🐂</div>
-      <div>
-        <div style="font-size:26px;font-weight:800;line-height:1.1">MB Stock Intelligence</div>
-        <div style="font-size:12px;color:#6c757d">Live NSE · TradingView Charts · Signal Reasoning · Telegram Alerts</div>
+    <div style="background:#050607;border:1px solid rgba(255,255,255,0.05);border-radius:12px;
+                padding:12px 20px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);
+                    border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:6px 12px">
+          <span class="live-dot"></span>
+          <span style="font-size:12px;font-weight:900;color:#a3e635;font-family:'Manrope',sans-serif">BullzStock</span>
+          <span style="font-size:10px;color:#6b7a94">NSE Intelligence</span>
+        </div>
+        <span style="font-size:10px;color:#4b5563;font-family:'IBM Plex Mono',monospace">v4.0-STABLE</span>
       </div>
-      <div style="margin-left:auto;background:#1a7340;color:white;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700">v3 · Enhanced</div>
-    </div>
-    <hr style="margin:0.4rem 0 1rem">""", unsafe_allow_html=True)
+      <div style="display:flex;align-items:center;gap:12px">
+        <div>
+          <div style="font-size:8px;text-transform:uppercase;letter-spacing:0.15em;color:#4b5563;font-weight:700">Market Status</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+            <span class="live-dot"></span>
+            <span style="font-size:10px;font-weight:700;color:#a3e635">NSE LIVE</span>
+          </div>
+        </div>
+        <div style="width:32px;height:32px;border-radius:50%;background:#1c1d1f;border:1px solid rgba(163,230,53,0.3);
+                    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#a3e635">MB</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
 
+    # ── Ticker marquee ─────────────────────────────────────────
+    st.markdown("""
+    <div style="background:#050607;border:1px solid rgba(255,255,255,0.04);border-radius:8px;
+                height:36px;display:flex;align-items:center;overflow:hidden;margin-bottom:16px;padding:0 12px">
+      <div style="font-size:9px;font-weight:700;color:#a3e635;flex-shrink:0;margin-right:16px;
+                  text-transform:uppercase;letter-spacing:0.1em">⚡ NSE LIVE</div>
+      <div style="overflow:hidden;flex:1">
+        <div class="animate-marquee" style="font-size:10px;font-weight:700;color:#9ca3af">
+          <span>NIFTY 50 <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">22,456.80</span> <span style="color:rgba(163,230,53,0.6)">+0.84%</span></span>
+          <span>SENSEX <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">73,852.10</span> <span style="color:rgba(163,230,53,0.6)">+0.76%</span></span>
+          <span>BANKNIFTY <span style="font-family:'IBM Plex Mono',monospace;color:#ff4d6a">48,210.50</span> <span style="color:rgba(255,77,106,0.6)">−0.22%</span></span>
+          <span>BAJAJ-AUTO <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">9,994.00</span> <span style="color:rgba(163,230,53,0.6)">+4.60%</span></span>
+          <span>RELIANCE <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">1,430.80</span> <span style="color:rgba(163,230,53,0.6)">+6.50%</span></span>
+          <span>HDFCBANK <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">1,680.20</span> <span style="color:rgba(163,230,53,0.6)">+2.10%</span></span>
+          <span>USDINR <span style="font-family:'IBM Plex Mono',monospace;color:#9ca3af">83.42</span> <span style="color:#4b5563">+0.01%</span></span>
+          <span>NIFTY 50 <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">22,456.80</span> <span style="color:rgba(163,230,53,0.6)">+0.84%</span></span>
+          <span>SENSEX <span style="font-family:'IBM Plex Mono',monospace;color:#a3e635">73,852.10</span> <span style="color:rgba(163,230,53,0.6)">+0.76%</span></span>
+          <span>BANKNIFTY <span style="font-family:'IBM Plex Mono',monospace;color:#ff4d6a">48,210.50</span> <span style="color:rgba(255,77,106,0.6)">−0.22%</span></span>
+        </div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+    # ── Welcome state ──────────────────────────────────────────
     if not analyse:
-        col_l, col_r = st.columns(2)
-        with col_l:
-            st.markdown("""
-            **How to use:**
-            1. Select an industry from the sidebar filter
-            2. Pick a stock and timeframe
-            3. Click **Analyse Now**
-            4. Review signal, reasoning, chart and metrics
-
-            **Signals explained:**
-            - **STRONG BUY / BUY** — Majority of indicators align bullish
-            - **SHORT SELL / SELL** — Majority of indicators align bearish
-            - **HOLD** — Mixed signals, maintain position
-            - **WAIT** — No clear direction, stay out
-            """)
-        with col_r:
-            st.markdown("""
-            **What you get:**
-            - 📈 Live TradingView chart with EMA/BB overlays
-            - 🎯 Entry price, Target and Stop Loss (ATR-based)
-            - 💡 2-line signal reasoning in plain English
-            - 🔗 News reference links for the stock
-            - 📊 Visual metrics — RSI gauge, R:R donut, sparkline
-            - 🕐 Session-based signal history table
-            - 📲 Telegram alert when target is hit
-            """)
+        st.markdown("""
+        <div style="background:#111315;border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:32px 36px;max-width:700px;margin:20px auto">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.18em;color:#4b5563;margin-bottom:16px">📋 How To Use</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="font-size:13px;font-weight:800;color:#e3e2e2;margin-bottom:12px">Getting Started</div>
+              <ol style="font-size:11px;color:#6b7a94;line-height:2;padding-left:18px">
+                <li>Select an industry from the sidebar</li>
+                <li>Pick a stock from the dropdown</li>
+                <li>Choose your timeframe</li>
+                <li>Click <strong style="color:#a3e635">⚡ Analyse Now</strong></li>
+              </ol>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:800;color:#e3e2e2;margin-bottom:12px">Signal Legend</div>
+              <div style="font-size:11px;line-height:2.2">
+                <div><span style="color:#BDFF00;font-weight:700">▲▲ STRONG BUY</span> <span style="color:#6b7a94">— Strong bullish confluence</span></div>
+                <div><span style="color:#BDFF00;font-weight:700">▲ BUY</span> <span style="color:#6b7a94">— Bullish indicators aligned</span></div>
+                <div><span style="color:#4d9fff;font-weight:700">▬ HOLD</span> <span style="color:#6b7a94">— Mixed signals, hold position</span></div>
+                <div><span style="color:#f5a623;font-weight:700">◌ WAIT</span> <span style="color:#6b7a94">— No clear direction</span></div>
+                <div><span style="color:#ff4d6a;font-weight:700">▼ SELL</span> <span style="color:#6b7a94">— Bearish indicators aligned</span></div>
+                <div><span style="color:#ff4d6a;font-weight:700">▼▼ SHORT SELL</span> <span style="color:#6b7a94">— Strong bearish confluence</span></div>
+              </div>
+            </div>
+          </div>
+        </div>""", unsafe_allow_html=True)
         return
 
+    # ── Fetch data ─────────────────────────────────────────────
     stock = STOCKS[ticker]
     tf    = TIMEFRAMES[tf_key]
 
@@ -992,7 +1083,12 @@ def main():
         price_data = fetch_market_data(ticker, tf_key)
 
     if not price_data:
-        st.error("Both Yahoo Finance and Alpha Vantage failed. NSE may be closed (Mon–Fri 9:15–15:30 IST).")
+        st.markdown("""
+        <div style="background:rgba(255,77,106,0.08);border:1px solid rgba(255,77,106,0.25);border-radius:12px;padding:20px;text-align:center">
+          <div style="font-size:20px;margin-bottom:8px">⚠️</div>
+          <div style="font-weight:700;color:#ff4d6a">Data fetch failed</div>
+          <div style="font-size:11px;color:#6b7a94;margin-top:6px">Both Yahoo Finance and Alpha Vantage failed.<br>NSE may be closed (Mon–Fri 9:15–15:30 IST).</div>
+        </div>""", unsafe_allow_html=True)
         return
 
     ind    = compute_all(price_data)
@@ -1001,14 +1097,13 @@ def main():
     curr   = price_data["current_price"]
     chg_up = price_data["change"] >= 0
     signal = sig["signal"]
-    sc     = SIGNAL_CONFIG.get(signal, SIGNAL_CONFIG["HOLD"])
+    sv     = SIGNAL_V2.get(signal, SIGNAL_V2["WAIT"])
     macd   = ind["macd"]
     boll   = ind["bollinger"]
     rsi    = ind["rsi"]
     ema50  = ind["ema50"]
     ema200 = ind["ema200"]
 
-    # Save history
     update_signal_history(ticker, {
         "time": datetime.now().strftime("%H:%M:%S"), "tf": tf["label"],
         "price": curr, "change_pct": price_data["change_pct"],
@@ -1017,134 +1112,193 @@ def main():
         "prob": sig["success_prob"],
     })
 
-    # ── Live price strip ──────────────────────────────────────
-    chg_color = "#1a7340" if chg_up else "#721c24"
+    # ── Asset header card ──────────────────────────────────────
+    chg_color = "#BDFF00" if chg_up else "#ff4d6a"
     chg_sym   = "▲" if chg_up else "▼"
-    st.markdown(f"""
-    <div style="border-radius:12px;padding:14px 22px;margin-bottom:1rem;
-                border:1px solid {'#c3e6cb' if chg_up else '#f5c6cb'};
-                background:{'#f0fff4' if chg_up else '#fff5f5'};
-                display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-      <div>
-        <div style="font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
-          {INDUSTRY_ICONS.get(stock['industry'],'📌')} {stock['fullName']} · NSE · {tf['label']}
-        </div>
-        <div style="font-size:30px;font-weight:800;margin-top:2px">₹{curr:,.2f}
-          <span style="font-size:15px;color:{chg_color};margin-left:8px">{chg_sym} ₹{abs(price_data['change']):.2f} ({abs(price_data['change_pct']):.2f}%)</span>
-        </div>
-      </div>
-      <div style="font-size:11px;color:#6c757d;text-align:right">
-        <div>{price_data['time']} IST · {price_data['source']}</div>
-        <div>Prev close ₹{price_data['prev_close']:,.2f} · {ind['candles']} candles</div>
-      </div>
-    </div>""", unsafe_allow_html=True)
-
-    # OHLCV
-    c1,c2,c3,c4,c5,c6 = st.columns(6)
-    with c1: metric_card("Open",     fmt_inr(price_data["open"]))
-    with c2: metric_card("High",     fmt_inr(price_data["high"]),          value_color="#1a7340")
-    with c3: metric_card("Low",      fmt_inr(price_data["low"]),           value_color="#721c24")
-    with c4: metric_card("Volume",   f"{price_data['volume']/1e5:.1f}L")
-    with c5: metric_card("52W High", fmt_inr(price_data.get("52w_high")), value_color="#1a7340")
-    with c6: metric_card("52W Low",  fmt_inr(price_data.get("52w_low")),  value_color="#721c24")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Signal Box + Reasoning ────────────────────────────────
-    confluence  = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
-    votes_html  = "".join(f'<div class="vote-item" style="color:#495057">• {v}</div>' for v in sig["votes"])
-    line1, line2 = build_signal_reasoning(sig, ind, price_data)
-    google_link, mc_link = get_news_link(ticker, stock["fullName"])
+    chg_arrow = "arrow_drop_up" if chg_up else "arrow_drop_down"
 
     st.markdown(f"""
-    <div class="signal-box" style="background:{sc['bg']};border:2px solid {sc['border']}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+                border-radius:14px;padding:20px 24px;margin-bottom:12px;
+                display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="width:52px;height:52px;border-radius:12px;background:#1c1d1f;border:1px solid rgba(255,255,255,0.08);
+                    display:flex;align-items:center;justify-content:center;font-size:22px">
+          {INDUSTRY_ICONS.get(stock['industry'],'📊')}
+        </div>
         <div>
-          <div style="font-size:11px;color:{sc['color']};font-weight:700;text-transform:uppercase;letter-spacing:0.06em">
-            Signal · {tf['label']} · {sig['regime']}
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <div style="font-size:22px;font-weight:900;color:#e3e2e2;font-family:'Manrope',sans-serif">{ticker}</div>
+            <div style="background:#1c1d1f;color:#6b7a94;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em">
+              {stock['fullName'].upper()} · NSE
+            </div>
           </div>
-          <div style="font-size:26px;font-weight:800;color:{sc['color']};margin-top:4px">{sc['icon']} {signal}</div>
-          <div style="font-size:12px;color:{sc['color']};margin-top:2px">{confluence}</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="font-size:34px;font-weight:900;font-family:'IBM Plex Mono',monospace;color:#e3e2e2;line-height:1">₹{curr:,.2f}</div>
+            <div style="color:{chg_color};font-weight:700;font-size:15px">{chg_sym} {abs(price_data['change_pct']):.2f}%</div>
+          </div>
         </div>
-        <div style="max-width:400px">{votes_html}</div>
       </div>
-    </div>
-    <div class="reasoning-box">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#6c757d;letter-spacing:0.05em;margin-bottom:6px">
-        💡 Signal Reasoning
-      </div>
-      <div>📌 {line1}</div>
-      <div style="margin-top:4px">📌 {line2}</div>
-      <div style="margin-top:8px;font-size:12px;color:#6c757d">
-        🔗 News: <a href="{google_link}" target="_blank" style="color:#004085;text-decoration:none">Google News</a>
-        &nbsp;·&nbsp;
-        <a href="{mc_link}" target="_blank" style="color:#004085;text-decoration:none">MoneyControl</a>
-        &nbsp;·&nbsp;
-        <a href="https://economictimes.indiatimes.com/markets/stocks/news" target="_blank" style="color:#004085;text-decoration:none">Economic Times</a>
+      <div style="display:flex;gap:20px;flex-wrap:wrap">
+        {ohlcv_card("Open",   fmt_inr(price_data['open']))}
+        {ohlcv_card("High",   fmt_inr(price_data['high']),   "#BDFF00")}
+        {ohlcv_card("Low",    fmt_inr(price_data['low']),    "#ff4d6a")}
+        {ohlcv_card("Volume", f"{price_data['volume']/1e5:.1f}L")}
+        {ohlcv_card("52W H",  fmt_inr(price_data.get('52w_high')), "#BDFF00")}
+        {ohlcv_card("52W L",  fmt_inr(price_data.get('52w_low')),  "#ff4d6a")}
       </div>
     </div>""", unsafe_allow_html=True)
 
-    # ── Trade Levels ──────────────────────────────────────────
-    st.markdown("### 🎯 Trade Levels")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: metric_card("Buy / Entry",   fmt_inr(sig["buy_price"]),    value_color="#004085")
-    with c2: metric_card("Target Price",  fmt_inr(sig["target_price"]), value_color="#1a7340")
-    with c3: metric_card("Stop Loss",     fmt_inr(sig["stop_loss"]),    value_color="#721c24")
-    with c4: metric_card("Hold Duration", sig["hold_duration"])
+    # ── Two-column layout: Chart | Signal Panel ────────────────
+    col_chart, col_panel = st.columns([2, 1], gap="small")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    with col_chart:
+        # Chart TF controls
+        tf_btns = ""
+        for tfk, tfv in TIMEFRAMES.items():
+            active = tfk == tf_key
+            cls = "background:rgba(189,255,0,0.1);color:#BDFF00;border:1px solid rgba(189,255,0,0.3)" if active else "background:#111315;color:#6b7a94;border:1px solid rgba(255,255,255,0.06)"
+            tf_btns += f'<span style="{cls};font-size:10px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:Manrope,sans-serif">{tfk}</span>'
 
-    # ── Visual Metrics ────────────────────────────────────────
-    st.markdown("### 📊 Visual Metrics")
-    render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
-                          price_data["closes"], ind["period_return"])
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:5px">{tf_btns}</div>
+          <div style="width:1px;height:16px;background:rgba(255,255,255,0.08);margin:0 4px"></div>
+          <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;cursor:pointer;
+                       {'background:rgba(189,255,0,0.1);color:#BDFF00' if st.session_state.chart_show_ema50 else 'background:#111315;color:#6b7a94'}">EMA 50</span>
+          <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;cursor:pointer;
+                       {'background:rgba(245,166,35,0.1);color:#f5a623' if st.session_state.chart_show_ema200 else 'background:#111315;color:#6b7a94'}">EMA 200</span>
+          <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;cursor:pointer;
+                       {'background:rgba(77,159,255,0.1);color:#4d9fff' if st.session_state.chart_show_bb else 'background:#111315;color:#6b7a94'}">BB Bands</span>
+        </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        render_tradingview_chart(stock["tv"], tf["tv_interval"])
 
-    # ── TradingView Chart ─────────────────────────────────────
-    st.markdown("### 📈 Live Chart")
-    st.caption("Powered by TradingView · Use the toolbar to zoom, draw or add indicators")
-    render_chart_toggle_bar()
-    render_tradingview_chart(
-        stock["tv"], tf["tv_interval"],
-        st.session_state.chart_show_ema50,
-        st.session_state.chart_show_ema200,
-        st.session_state.chart_show_bb,
-    )
+        # Signal History table
+        st.markdown("""
+        <div style="margin-top:12px;background:#050607;border:1px solid rgba(255,255,255,0.05);
+                    border-radius:10px;padding:14px 16px">
+          <div class="section-label">🕐 Signal History · Session</div>""", unsafe_allow_html=True)
+        render_signal_history(ticker)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    with col_panel:
+        # ── Signal box ─────────────────────────────────────────
+        confluence = f"{abs(sig['pct_bull']):.0f}% {'bullish' if sig['pct_bull'] >= 0 else 'bearish'} confluence"
+        line1, line2 = build_signal_reasoning(sig, ind, price_data)
+        google_link, mc_link = get_news_link(ticker, stock["fullName"])
 
-    # ── Indicators + Fundamentals ─────────────────────────────
-    col_ind, col_fund = st.columns(2)
+        # Intensity bar calculation
+        pct = sig["pct_bull"]
+        n_bars = 5
+        filled_bull = round(max(pct, 0) / 100 * n_bars)
+        filled_bear = round(max(-pct, 0) / 100 * n_bars)
+        intensity_label = ("Strong Buy" if pct >= 60 else "Mild Buy" if pct >= 30
+                           else "Strong Sell" if pct <= -60 else "Mild Sell" if pct <= -30
+                           else "Weak Bearish" if pct < 0 else "Neutral")
+        intensity_color = "#BDFF00" if pct >= 30 else "#ff4d6a" if pct <= -30 else "#f5a623"
 
-    with col_ind:
-        st.markdown("#### 📐 Technical Indicators")
+        bar_html = ""
+        for i in range(n_bars):
+            if pct >= 0:
+                clr = "rgba(189,255,0,0.6)" if i < filled_bull else "#1e2022"
+            else:
+                clr = "rgba(255,77,106,0.6)" if i < filled_bear else "#1e2022"
+            bar_html += f'<div style="height:5px;flex:1;border-radius:3px;background:{clr}"></div>'
+
+        st.markdown(f"""
+        <div style="background:#050607;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px">
+          <div class="section-label">Signal Analysis</div>
+
+          <!-- Signal pill -->
+          <div class="{sv['cls']}" style="border-radius:12px;padding:16px;margin-bottom:12px">
+            <div style="display:flex;align-items:start;justify-content:space-between;margin-bottom:10px">
+              <div>
+                <div style="font-size:9px;color:#6b7a94;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px">Signal · {tf['label']}</div>
+                <div style="font-size:24px;font-weight:900;color:{sv['color']};font-family:'Manrope',sans-serif">{sv['icon']} {signal}</div>
+              </div>
+              <span style="font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;
+                           background:{sv['conf_bg']};color:{sv['conf_color']}">{confluence}</span>
+            </div>
+            <div style="font-size:10px;color:#6b7a94;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px">
+              Regime: <span style="font-weight:700;color:{sv['color']}">{sig['regime']}</span>
+            </div>
+          </div>
+
+          <!-- Trade levels grid -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+            {trade_card("Entry", fmt_inr(sig['buy_price']), "Buy zone", "#4d9fff")}
+            {trade_card("Target", fmt_inr(sig['target_price']), f"+{sig['profit_potential']:.1f}%", "#BDFF00", "#a3e635")}
+            {trade_card("Stop Loss", fmt_inr(sig['stop_loss']), f"R:R {sig['rr_ratio']:.2f}x", "#ff4d6a", "#ff4d6a")}
+            {trade_card("Hold", sig['hold_duration'], "Duration")}
+          </div>
+
+          <!-- Reasoning -->
+          <div style="background:#111315;border-left:2px solid {sv['color']};border-top:1px solid rgba(255,255,255,0.04);
+                      border-right:1px solid rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.04);
+                      border-radius:10px;padding:14px;margin-bottom:12px">
+            <div style="font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:0.12em;color:#4b5563;margin-bottom:8px">💡 Signal Reasoning</div>
+            <div style="font-size:10px;color:#6b7a94;line-height:1.7">📌 {line1}</div>
+            <div style="font-size:10px;color:#6b7a94;line-height:1.7;margin-top:6px">📌 {line2}</div>
+            <div style="margin-top:10px;font-size:10px;color:#4b5563">
+              🔗
+              <a href="{google_link}" target="_blank" style="color:#4d9fff;text-decoration:none;margin:0 4px">Google News</a>·
+              <a href="{mc_link}" target="_blank" style="color:#4d9fff;text-decoration:none;margin:0 4px">MoneyControl</a>
+            </div>
+          </div>
+
+          <!-- Signal intensity bar -->
+          <div style="background:#111315;border:1px solid rgba(255,255,255,0.04);border-radius:10px;padding:14px">
+            <div style="display:flex;justify-content:space-between;font-size:10px;font-weight:700;text-transform:uppercase;color:#4b5563;margin-bottom:10px">
+              <span>Signal Intensity</span>
+              <span style="color:{intensity_color}">{intensity_label}</span>
+            </div>
+            <div style="display:flex;gap:4px">{bar_html}</div>
+            <div style="display:flex;justify-content:space-between;font-size:9px;color:#4b5563;margin-top:6px">
+              <span>Strong Buy</span><span>Strong Sell</span>
+            </div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+        # ── Visual Metrics (compact for panel) ─────────────────
+        st.markdown("""
+        <div style="margin-top:8px;background:#050607;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px">
+          <div class="section-label">Visual Metrics</div>""", unsafe_allow_html=True)
+        render_visual_metrics(rsi, sig["success_prob"], sig["rr_ratio"],
+                              price_data["closes"], ind["period_return"])
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Technical Indicators ────────────────────────────────
         rsi_val  = f"{rsi:.2f}"           if rsi             else "—"
         macd_val = f"{macd['hist']:.4f}"  if macd["hist"]    else "—"
         boll_val = f"{boll['pct']:.1f}%"  if boll["pct"]     else "—"
         sk_val   = f"{ind['stoch_k']:.1f}%" if ind["stoch_k"] else "—"
         pr       = ind["period_return"]
 
-        rsi_read  = ("Overbought", "#721c24") if rsi and rsi > 70 else ("Oversold", "#1a7340") if rsi and rsi < 30 else ("Neutral", "#495057")
-        macd_read = ("Bullish ▲", "#1a7340") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "#721c24")
-        ema_read  = ("Golden Cross ▲", "#1a7340") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "#721c24") if ema50 and ema200 else ("N/A", "#6c757d")
-        sk_read   = ("Overbought", "#721c24") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "#1a7340") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "#495057")
+        rsi_badge  = ("Overbought", "ib-bear") if rsi and rsi > 70 else ("Oversold", "ib-bull") if rsi and rsi < 30 else ("Neutral", "ib-neut")
+        macd_badge = ("Bullish ▲", "ib-bull") if macd["hist"] and macd["hist"] > 0 else ("Bearish ▼", "ib-bear")
+        ema_badge  = ("Golden Cross ▲", "ib-bull") if ema50 and ema200 and ema50 > ema200 else ("Death Cross ▼", "ib-bear") if ema50 and ema200 else ("N/A", "ib-neut")
+        boll_badge = ("Near Upper", "ib-bear") if boll["pct"] and boll["pct"] > 80 else ("Near Lower", "ib-bull") if boll["pct"] and boll["pct"] < 20 else ("Mid Range", "ib-neut")
+        sk_badge   = ("Overbought", "ib-bear") if ind["stoch_k"] and ind["stoch_k"] > 80 else ("Oversold", "ib-bull") if ind["stoch_k"] and ind["stoch_k"] < 20 else ("Neutral", "ib-neut")
 
-        indicator_row("RSI (14)",       rsi_val,  *rsi_read)
-        indicator_row("MACD Histogram", macd_val, *macd_read)
-        indicator_row("Bollinger %B",   boll_val, boll["position"])
-        indicator_row("EMA 50",         fmt_inr(ema50),  f"Price {'above' if ema50 and curr > ema50 else 'below'} EMA50" if ema50 else "—")
-        indicator_row("EMA 200",        fmt_inr(ema200), *ema_read)
-        indicator_row("ATR (14)",       fmt_inr(ind["atr"]), "Volatility measure")
-        indicator_row("Stochastic K",   sk_val, *sk_read)
-        indicator_row("Period Return",  fmt_pct(pr), "▲" if pr and pr >= 0 else "▼", "#1a7340" if pr and pr >= 0 else "#721c24")
-        indicator_row("Volume Trend",   ind["volume_trend"])
-        indicator_row("Trend",          ind["trend"])
-        indicator_row("Candlestick",    ind["pattern"])
-        indicator_row("Candles used",   str(ind["candles"]))
+        st.markdown(f"""
+        <div style="margin-top:8px;background:#050607;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px">
+          <div class="section-label">📐 Technical Indicators</div>
+          {indicator_row_v2("RSI (14)", rsi_val, *rsi_badge)}
+          {indicator_row_v2("MACD Histogram", macd_val, *macd_badge)}
+          {indicator_row_v2("Bollinger %B", boll_val, *boll_badge)}
+          {indicator_row_v2("EMA 50", fmt_inr(ema50), *ema_badge)}
+          {indicator_row_v2("EMA 200", fmt_inr(ema200))}
+          {indicator_row_v2("ATR (14)", fmt_inr(ind['atr']), "Volatility", "ib-neut")}
+          {indicator_row_v2("Stochastic K", sk_val, *sk_badge)}
+          {indicator_row_v2("Period Return", fmt_pct(pr), ("▲ Positive" if pr and pr >= 0 else "▼ Negative") if pr else "", "ib-bull" if pr and pr >= 0 else "ib-bear")}
+          {indicator_row_v2("Volume Trend", ind['volume_trend'])}
+          {indicator_row_v2("Trend", ind['trend'])}
+          {indicator_row_v2("Candlestick", ind['pattern'])}
+          {indicator_row_v2("Candles Used", str(ind['candles']))}
+        </div>""", unsafe_allow_html=True)
 
-    with col_fund:
-        st.markdown("#### 📋 Fundamentals")
+        # ── Fundamentals ────────────────────────────────────────
         pe  = price_data.get("pe_ratio")
         eps = price_data.get("eps")
         mc  = price_data.get("market_cap")
@@ -1158,51 +1312,52 @@ def main():
         cr  = price_data.get("current_ratio")
         pm  = price_data.get("profit_margins")
 
-        indicator_row("P/E Ratio",      f"{pe:.1f}" if pe else "—", "High" if pe and pe > 30 else "Moderate" if pe else "")
-        indicator_row("EPS",            f"₹{eps:.2f}" if eps else "—")
-        indicator_row("Market Cap",     f"₹{mc/1e7:.0f} Cr" if mc else "—")
-        indicator_row("Revenue Growth", f"{rg*100:.1f}%" if rg else "—")
-        indicator_row("Debt / Equity",  f"{de:.2f}" if de else "—", "High leverage" if de and de > 1 else "")
-        indicator_row("ROE",            f"{roe*100:.1f}%" if roe else "—", "Strong" if roe and roe > 0.15 else "")
-        indicator_row("Dividend Yield", f"{dy*100:.2f}%" if dy else "—")
-        indicator_row("Book Value",     f"₹{bv:.2f}" if bv else "—")
-        indicator_row("Price/Book",     f"{pb:.2f}x" if pb else "—")
-        indicator_row("Current Ratio",  f"{cr:.2f}" if cr else "—")
-        indicator_row("Profit Margin",  f"{pm*100:.1f}%" if pm else "—")
-        indicator_row("Sector",         sec or "—")
-        indicator_row("52W High",       fmt_inr(price_data.get("52w_high")))
-        indicator_row("52W Low",        fmt_inr(price_data.get("52w_low")))
-        indicator_row("Data Source",    price_data["source"])
+        no_fund = not any([pe, eps, mc, roe, de])
+        fund_note = f"""<div style="font-size:10px;color:#f5a623;padding:8px;background:rgba(245,166,35,0.06);border-radius:6px;margin-top:8px">
+          ⚠ Fundamental data unavailable from Yahoo Finance for this ticker.
+          <a href="{mc_link}" target="_blank" style="color:#4d9fff;text-decoration:none">View on MoneyControl →</a>
+        </div>""" if no_fund else ""
 
-        if not any([pe, eps, mc, roe, de]):
-            st.caption("⚠️ Fundamental data unavailable from Yahoo Finance for this stock. "
-                       "This is common for smaller NSE stocks. "
-                       f"[View on MoneyControl]({get_news_link(ticker, stock['fullName'])[1]})")
+        st.markdown(f"""
+        <div style="margin-top:8px;background:#050607;border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:16px">
+          <div class="section-label">📋 Fundamentals</div>
+          {indicator_row_v2("P/E Ratio",      f"{pe:.1f}" if pe else "—", "High" if pe and pe > 30 else "Fair", "ib-warn" if pe and pe > 30 else "ib-neut")}
+          {indicator_row_v2("EPS",            f"₹{eps:.2f}" if eps else "—")}
+          {indicator_row_v2("Market Cap",     f"₹{mc/1e7:.0f} Cr" if mc else "—")}
+          {indicator_row_v2("Revenue Growth", f"{rg*100:.1f}%" if rg else "—", ("Positive" if rg and rg > 0 else "Negative") if rg else "", "ib-bull" if rg and rg > 0 else "ib-bear" if rg else "ib-neut")}
+          {indicator_row_v2("Debt / Equity",  f"{de:.2f}" if de else "—", "High leverage" if de and de > 1 else "", "ib-warn" if de and de > 1 else "ib-neut")}
+          {indicator_row_v2("ROE",            f"{roe*100:.1f}%" if roe else "—", "Strong" if roe and roe > 0.15 else "", "ib-bull" if roe and roe > 0.15 else "ib-neut")}
+          {indicator_row_v2("Dividend Yield", f"{dy*100:.2f}%" if dy else "—")}
+          {indicator_row_v2("Book Value",     f"₹{bv:.2f}" if bv else "—")}
+          {indicator_row_v2("Price/Book",     f"{pb:.2f}x" if pb else "—")}
+          {indicator_row_v2("Profit Margin",  f"{pm*100:.1f}%" if pm else "—")}
+          {indicator_row_v2("Sector",         sec or "—")}
+          {indicator_row_v2("Data Source",    price_data['source'])}
+          {fund_note}
+        </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # ── Footer disclaimer ──────────────────────────────────────
+    st.markdown(f"""
+    <div style="margin-top:16px;background:#050607;border:1px solid rgba(255,255,255,0.04);
+                border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;
+                align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:9px;color:#4b5563;line-height:1.8">
+        <span class="live-dot" style="margin-right:6px"></span>
+        DATA: {price_data['source'].upper()} &nbsp;·&nbsp;
+        ENGINE: RULE-BASED · 6 INDICATORS &nbsp;·&nbsp;
+        NSE: MON–FRI 9:15 AM – 3:30 PM IST
+      </div>
+      <div style="font-size:9px;color:#4b5563">
+        ⚠ Rule-based signals — <strong style="color:#6b7a94">not financial advice</strong>. Consult a SEBI-registered advisor. &nbsp;·&nbsp; VER: 4.0-STABLE &nbsp;·&nbsp; © BullzStock 2025
+      </div>
+    </div>""", unsafe_allow_html=True)
 
-    # ── Signal History ────────────────────────────────────────
-    st.markdown("### 🕐 Signal History")
-    st.caption(f"Session history for **{stock['fullName']}** — last 10 analyses")
-    render_signal_history(ticker)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ── Telegram alert ────────────────────────────────────────
-    if curr >= sig["target_price"] * 0.98:
+    # ── Telegram alert ─────────────────────────────────────────
+    if TG_TOKEN and curr >= sig["target_price"] * 0.98:
         msg = (f"🎯 Target Alert — {ticker}\n\nCurrent: {fmt_inr(curr)}\n"
                f"Target: {fmt_inr(sig['target_price'])}\nSignal: {signal}\n"
                f"Profit: +{sig['profit_potential']:.1f}%\nProbability: {sig['success_prob']:.0f}%")
-        ok  = send_telegram(msg)
-        st.success("🎯 Target reached! Telegram alert sent.") if ok else st.warning("Target reached but Telegram alert failed.")
-
-    # ── Disclaimer ────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="disclaimer">
-      ⚠️ Data from {price_data['source']}. Signals are rule-based indicator confluence — <b>not financial advice</b>.
-      Always consult a SEBI-registered investment advisor before investing.
-      NSE trading hours: Mon–Fri 9:15 AM – 3:30 PM IST.
-    </div>""", unsafe_allow_html=True)
+        send_telegram(msg)
 
 if __name__ == "__main__":
     main()
